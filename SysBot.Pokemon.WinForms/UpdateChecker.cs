@@ -10,8 +10,8 @@ namespace SysBot.Pokemon.WinForms
 {
     public class UpdateChecker
     {
-        private const string RepositoryOwner = "Secludedly";
-        private const string RepositoryName = "FusionBot";
+        private const string RepositoryOwner = "whosluzy";
+        private const string RepositoryName = "Sysbot-UP";
 
         // Reuse HttpClient for better performance and socket management
         private static readonly HttpClient _httpClient = new()
@@ -35,8 +35,19 @@ namespace SysBot.Pokemon.WinForms
             // Only show dialog if explicitly requested via forceShow (manual check)
             if (forceShow && showDialog)
             {
-                var updateForm = new UpdateForm(updateRequired, newVersion ?? "", updateAvailable);
-                updateForm.ShowDialog();
+                if (!updateAvailable)
+                {
+                    System.Windows.Forms.MessageBox.Show(
+                        $"You are already on the latest version ({TradeBot.Version}).",
+                        "Up to Date",
+                        System.Windows.Forms.MessageBoxButtons.OK,
+                        System.Windows.Forms.MessageBoxIcon.Information);
+                }
+                else
+                {
+                    var updateForm = new UpdateForm(updateRequired, newVersion ?? "", updateAvailable);
+                    updateForm.ShowDialog();
+                }
             }
 
             return (updateAvailable, updateRequired, newVersion ?? string.Empty);
