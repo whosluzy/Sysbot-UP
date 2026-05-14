@@ -280,9 +280,17 @@ public class DiscordTradeNotifier<T> : IPokeTradeNotifier<T>, IDisposable
         OnFinish?.Invoke(routine);
         StopPeriodicUpdates();
 
+        var baseMessage = msg switch
+        {
+            PokeTradeResult.NoTrainerFound => "No Trainer was found.\nPlease make sure you are using online mode on your game not local mode and that you have inserted the correct code on time!",
+            PokeTradeResult.TrainerTooSlow => "Trainer took too long to respond.",
+            PokeTradeResult.TrainerLeft => "Trainer left the trade.",
+            _ => msg.ToString(),
+        };
+
         var cancelMessage = TotalBatchTrades > 1
-            ? $"Batch trade canceled: {msg}. All remaining trades have been canceled."
-            : msg.ToString();
+            ? $"Batch trade canceled: {baseMessage} All remaining trades have been canceled."
+            : baseMessage;
 
         EmbedHelper.SendTradeCanceledEmbedAsync(Trader, cancelMessage).ConfigureAwait(false);
     }
