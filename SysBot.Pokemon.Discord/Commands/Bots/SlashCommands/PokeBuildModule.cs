@@ -32,6 +32,14 @@ internal static class BuilderData
     public static IReadOnlyList<string> GetMoves()
         => _moves ??= BuildMoves();
 
+    private static IReadOnlyList<string> BuildMoves()
+        => GameInfo.GetStrings("en").movelist
+            .Select((name, idx) => (name, idx))
+            .Where(x => x.idx > 0 && !string.IsNullOrEmpty(x.name))
+            .OrderBy(x => x.name)
+            .Select(x => x.name)
+            .ToList();
+
     public static int TotalPages(int count) => Math.Max(1, (int)Math.Ceiling(count / (double)PageSize));
 
     public static IEnumerable<T> GetPage<T>(IReadOnlyList<T> list, int page)
@@ -113,15 +121,36 @@ internal static class BuilderData
             .ToList();
     }
 
-    // ── Moves ─────────────────────────────────────────────────────────────────
+    // ── Moves (per species, cached) ───────────────────────────────────────────
 
-    private static IReadOnlyList<string> BuildMoves()
-        => GameInfo.GetStrings("en").movelist
-            .Select((name, idx) => (name, idx))
-            .Where(x => x.idx > 0 && !string.IsNullOrEmpty(x.name))
-            .OrderBy(x => x.name)
-            .Select(x => x.name)
+    private static readonly ConcurrentDictionary<(string Game, ushort Species, byte Form), IReadOnlyList<string>>
+        MovesForSpeciesCache = new();
+
+    public static IReadOnlyList<string> GetMovesForSpecies(string gameType, ushort species, byte form)
+        => MovesForSpeciesCache.GetOrAdd((gameType, species, form), k => BuildMovesForSpecies(k.Game, k.Species, k.Form));
+
+    private static IReadOnlyList<string> BuildMovesForSpecies(string gameType, ushort species, byte form)
+    {
+        var moveNames = GameInfo.GetStrings("en").movelist;
+        var result    = new bool[moveNames.Length];
+        var evo       = new EvoCriteria { Species = species, Form = form, LevelMax = 100, LevelMin = 1 };
+
+        switch (gameType)
+        {
+            case "sv":   LearnSource9SV.Instance.GetAllMoves(result,   new PK9(), evo, MoveSourceType.All); break;
+            case "la":   LearnSource8LA.Instance.GetAllMoves(result,   new PA8(), evo, MoveSourceType.All); break;
+            case "plza": LearnSource9ZA.Instance.GetAllMoves(result,   new PA9(), evo, MoveSourceType.All); break;
+            case "swsh": LearnSource8SWSH.Instance.GetAllMoves(result, new PK8(), evo, MoveSourceType.All); break;
+            case "bdsp": LearnSource8BDSP.Instance.GetAllMoves(result, new PB8(), evo, MoveSourceType.All); break;
+        }
+
+        return result
+            .Select((can, i) => (can, i))
+            .Where(x => x.can && x.i > 0 && x.i < moveNames.Length && !string.IsNullOrEmpty(moveNames[x.i]))
+            .OrderBy(x => moveNames[x.i])
+            .Select(x => moveNames[x.i])
             .ToList();
+    }
 
     // ── EntityContext per game ────────────────────────────────────────────────
 
@@ -368,7 +397,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
         if (!ok) return;
         await DeferAsync().ConfigureAwait(false);
-        var total = BuilderData.TotalPages(BuilderData.GetMoves().Count);
+        var total = BuilderData.TotalPages(GetSessionMoves(session).Count);
         session.MovePage = Math.Min(total - 1, session.MovePage + 1);
         await UpdateAsync(session, userId, PickerMode.Move).ConfigureAwait(false);
     }
@@ -713,9 +742,8 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             .Build();
     }
 
-    private static Embed MovePickerEmbed(PokemonBuilderState s)
+    private static Embed MovePickerEmbed(PokemonBuilderState s, IReadOnlyList<string> moves)
     {
-        var moves = BuilderData.GetMoves();
         var total = BuilderData.TotalPages(moves.Count);
         var set   = new[] { s.Move1, s.Move2, s.Move3, s.Move4 }
             .Select((m, i) => string.IsNullOrWhiteSpace(m) ? $"Move {i + 1}: *empty*" : $"Move {i + 1}: {m}");
@@ -724,22 +752,21 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             .WithColor(Color.Red)
             .WithDescription(
                 string.Join("\n", set) + "\n\n" +
-                $"Page **{s.MovePage + 1} / {total}** · {moves.Count} moves available\n" +
+                $"Page **{s.MovePage + 1} / {total}** · {moves.Count} legal moves for {s.SpeciesDisplay}\n" +
                 "Pick from the list, browse with ◀ ▶, or skip this slot.")
             .WithFooter($"PokedexMasterBot {TradeBot.Version}")
             .Build();
     }
 
-    private static MessageComponent MovePickerComponents(PokemonBuilderState s, ulong userId)
+    private static MessageComponent MovePickerComponents(PokemonBuilderState s, ulong userId, IReadOnlyList<string> moves)
     {
-        var moves = BuilderData.GetMoves();
         var total = BuilderData.TotalPages(moves.Count);
         var page  = s.MovePage;
         var slice = BuilderData.GetPage(moves, page).ToList();
 
         var menu = new SelectMenuBuilder()
             .WithCustomId($"pb_msel_{userId}")
-            .WithPlaceholder($"⚔️ Move {s.MoveStep + 1}...");
+            .WithPlaceholder($"⚔️ Move {s.MoveStep + 1} for {s.SpeciesDisplay}...");
         foreach (var move in slice)
             menu.AddOption(move, move);
 
@@ -773,8 +800,9 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
                 components = ItemPickerComponents(session, userId);
                 break;
             case PickerMode.Move:
-                embed      = MovePickerEmbed(session);
-                components = MovePickerComponents(session, userId);
+                var movesForPick = GetSessionMoves(session);
+                embed      = MovePickerEmbed(session, movesForPick);
+                components = MovePickerComponents(session, userId, movesForPick);
                 break;
             default:
                 // Builder — but if species not yet set, fall back to species picker
@@ -895,5 +923,29 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             case 2: s.Move3 = value; break;
             case 3: s.Move4 = value; break;
         }
+    }
+
+    // Parses "EnumName|form|DisplayName" stored in session.Species
+    private static (ushort Species, byte Form) ParseSpeciesForm(string value)
+    {
+        var parts = value.Split('|');
+        if (parts.Length >= 2
+            && Enum.TryParse<Species>(parts[0], true, out var sp)
+            && byte.TryParse(parts[1], out var form))
+            return ((ushort)sp, form);
+        if (Enum.TryParse<Species>(parts[0], true, out var sp2))
+            return ((ushort)sp2, 0);
+        return (0, 0);
+    }
+
+    // Returns the move list for the species already chosen in the session,
+    // falling back to all moves if none chosen yet.
+    private static IReadOnlyList<string> GetSessionMoves(PokemonBuilderState s)
+    {
+        if (string.IsNullOrWhiteSpace(s.Species)) return BuilderData.GetMoves();
+        var (sp, form) = ParseSpeciesForm(s.Species);
+        return sp > 0
+            ? BuilderData.GetMovesForSpecies(s.GameType, sp, form)
+            : BuilderData.GetMoves();
     }
 }
