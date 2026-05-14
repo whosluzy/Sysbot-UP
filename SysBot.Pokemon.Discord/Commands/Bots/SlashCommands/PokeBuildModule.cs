@@ -104,9 +104,11 @@ internal static class BuilderData
     {
         var ctx = gameType switch
         {
-            "la"             => EntityContext.Gen8a,
-            "swsh" or "bdsp" => EntityContext.Gen8,
-            _                => EntityContext.Gen9,
+            "la"   => EntityContext.Gen8a,
+            "swsh" => EntityContext.Gen8,
+            "bdsp" => EntityContext.Gen8b,
+            "lgpe" => EntityContext.Gen7b,
+            _      => EntityContext.Gen9,   // sv, plza
         };
         return GameInfo.GetStrings("en").Item
             .Select((name, idx) => (name, idx))
