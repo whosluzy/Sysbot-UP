@@ -9,8 +9,6 @@ public class ProgramConfig : BotList<PokeBotState>
 
     public ProgramMode Mode { get; set; } = ProgramMode.SV;
 
-    public string Theme { get; set; } = "";
-
     public bool HideFontsLink { get; set; } = false;
 }
 

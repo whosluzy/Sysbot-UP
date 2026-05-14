@@ -72,10 +72,6 @@ public sealed class PokeTradeHubConfig : BaseConfig
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public StreamSettings Stream { get; set; } = new();
 
-    [Browsable(false)]
-    [Category(Integration), Description("Users Theme Option Choice.")]
-    public string ThemeOption { get; set; } = string.Empty;
-
     [Category(Operation), Description("Add extra time for slower Switches.")]
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public TimingSettings Timings { get; set; } = new();

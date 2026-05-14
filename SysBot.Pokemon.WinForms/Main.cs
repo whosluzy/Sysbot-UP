@@ -388,9 +388,7 @@ namespace SysBot.Pokemon.WinForms
             Text = $"{(string.IsNullOrEmpty(Config.Hub.BotName) ? "PokedexMasterBot |" : Config.Hub.BotName)} {TradeBot.Version} | Mode: {Config.Mode}";
             UpdateBackgroundImage(Config.Mode);        // Call the method to update image in leftSidePanel
             UpdateUpperImage(Config.Mode);        // Call the method to update image in panelTitleBar
-            LoadThemeOptions();
-
-            CB_Themes.SelectedIndexChanged += CB_Themes_SelectedIndexChanged;
+            ThemeManager.ApplyTheme(this);
 
             // Initialize the Download Fonts link after config is loaded
             InitializeFontsLink();
@@ -810,31 +808,6 @@ namespace SysBot.Pokemon.WinForms
         ///////////////////////////////////////////////////
 
 
-        // Update the method signature to explicitly allow nullability for the 'sender' parameter.
-        private void CB_Themes_SelectedIndexChanged(object? sender, EventArgs e)
-        {
-            if (sender is not ComboBox comboBox)
-                return;
-
-            if (comboBox.SelectedItem is not string selected)
-                return;
-
-            Config.Theme = selected;
-            SaveCurrentConfig();
-            ThemeManager.ApplyTheme(this, selected);
-        }
-
-        private void LoadThemeOptions()
-        {
-            CB_Themes.Items.Clear();
-            foreach (var key in ThemeManager.ThemePresets.Keys)
-                CB_Themes.Items.Add(key);
-
-            CB_Themes.SelectedItem = Config.Theme;
-            ThemeManager.ApplyTheme(this, Config.Theme);
-        }
-
-
         ///////////////////////////////////////////////////////////////////
         /////// BOT HANDLING FOR INITIATING A NEW BOT IN THE FORMS ////////
         /////// ALSO HOLDS RANDOM CALL TO STOP THE WEBSERVER AFTER ////////
@@ -917,8 +890,8 @@ namespace SysBot.Pokemon.WinForms
             int horizontalCenter = panelLeftSide.Padding.Left
                                    + (usableWidth - leftSideImage.Width) / 2;
 
-            // Vertical: below your theme selector
-            int verticalOffsetBelowTheme = CB_Themes.Bottom + 20;
+            // Vertical: below the last nav button
+            int verticalOffsetBelowTheme = btnLogs.Bottom + 20;
 
             leftSideImage.Location = new Point(horizontalCenter, verticalOffsetBelowTheme);
             leftSideImage.SizeMode = PictureBoxSizeMode.Zoom;
