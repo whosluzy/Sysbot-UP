@@ -166,11 +166,23 @@ public static class Helpers<T> where T : PKM, new()
         // Now parse the ShowdownSet without the Language line
         if (!ShowdownParsing.TryParseAnyLanguage(contentWithoutLanguage, out ShowdownSet? set) || set == null || set.Species == 0)
         {
-            return Task.FromResult(new ProcessedPokemonResult<T>
+            // Attempt species name autocorrect before giving up
+            var autocorrected = TryAutocorrectSpeciesName(contentWithoutLanguage);
+            if (autocorrected != null &&
+                ShowdownParsing.TryParseAnyLanguage(autocorrected, out var correctedSet) &&
+                correctedSet?.Species != 0)
             {
-                Error = "Please try again, something about your format is wrong. Check spelling or if level/customizations are legally possible to exist in game also.",
-                ShowdownSet = set
-            });
+                set = correctedSet;
+                contentWithoutLanguage = autocorrected;
+            }
+            else
+            {
+                return Task.FromResult(new ProcessedPokemonResult<T>
+                {
+                    Error = "Please try again, something about your format is wrong. Check spelling or if level/customizations are legally possible to exist in game also.",
+                    ShowdownSet = set
+                });
+            }
         }
 
         var template = AutoLegalityWrapper.GetTemplate(set);
@@ -1225,6 +1237,80 @@ public static class Helpers<T> where T : PKM, new()
                 LogUtil.LogError($"Failed to send Full Batch Trade Error Log to channel {logChannel.ID}: {ex.Message}", nameof(Helpers<T>));
             }
         }
+    }
+
+    private static string? TryAutocorrectSpeciesName(string content)
+    {
+        var lines = content.Split('\n');
+        if (lines.Length == 0) return null;
+
+        var firstLine = lines[0].Trim();
+        if (string.IsNullOrEmpty(firstLine)) return null;
+
+        // Strip " @ Item" suffix
+        var atIdx = firstLine.IndexOf(" @", StringComparison.Ordinal);
+        var lineWithoutItem = atIdx >= 0 ? firstLine[..atIdx].Trim() : firstLine;
+
+        // Determine if format is "Nickname (Species)" or just "Species[-Form]"
+        var parenOpen = lineWithoutItem.IndexOf('(');
+        var parenClose = lineWithoutItem.IndexOf(')');
+        bool hasNickname = parenOpen >= 0 && parenClose > parenOpen;
+
+        string speciesWithForm = hasNickname
+            ? lineWithoutItem[(parenOpen + 1)..parenClose].Trim()
+            : lineWithoutItem;
+
+        // Separate optional form suffix (e.g. "-Alola", "-Galar")
+        var dashIdx = speciesWithForm.IndexOf('-');
+        string speciesInput = dashIdx > 0 ? speciesWithForm[..dashIdx] : speciesWithForm;
+        string formSuffix  = dashIdx > 0 ? speciesWithForm[dashIdx..] : string.Empty;
+
+        // Get the full English species list (skip index 0 which is empty)
+        var allSpecies = GameInfo.GetStrings("en").specieslist
+            .Skip(1)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToArray();
+
+        // If it already matches exactly (case-insensitive) don't touch it
+        if (allSpecies.Any(s => s.Equals(speciesInput, StringComparison.OrdinalIgnoreCase)))
+            return null;
+
+        // Dynamic edit-distance threshold: 1 per ~4 chars, capped at 3
+        int threshold = Math.Min(3, Math.Max(1, speciesInput.Length / 4));
+
+        var best = allSpecies
+            .Select(s => (Name: s, Dist: LevenshteinDistance(speciesInput.ToLowerInvariant(), s.ToLowerInvariant())))
+            .Where(x => x.Dist <= threshold)
+            .OrderBy(x => x.Dist)
+            .FirstOrDefault();
+
+        if (best.Name is null) return null;
+
+        // Reconstruct the first line with the corrected species name
+        var correctedSpecies = best.Name + formSuffix;
+        string newFirstLine = hasNickname
+            ? $"{lineWithoutItem[..parenOpen].Trim()} ({correctedSpecies})"
+            : correctedSpecies;
+
+        if (atIdx >= 0)
+            newFirstLine += firstLine[atIdx..]; // re-attach " @ Item"
+
+        lines[0] = newFirstLine;
+        return string.Join('\n', lines);
+    }
+
+    private static int LevenshteinDistance(string a, string b)
+    {
+        int[,] d = new int[a.Length + 1, b.Length + 1];
+        for (int i = 0; i <= a.Length; i++) d[i, 0] = i;
+        for (int j = 0; j <= b.Length; j++) d[0, j] = j;
+        for (int i = 1; i <= a.Length; i++)
+            for (int j = 1; j <= b.Length; j++)
+            {
+                int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                d[i, j] = Math.Min(Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1), d[i - 1, j - 1] + cost);
+            }
+        return d[a.Length, b.Length];
     }
 
     public static T? GetRequest(Download<PKM> dl)
