@@ -103,6 +103,26 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
 
     // ─── Slash commands ───────────────────────────────────────────────────────
 
+    [SlashCommand("pokebuild-setup", "Post the permanent Pokémon builder panel in this channel (Admin only)")]
+    public async Task PokeBuildSetupAsync()
+    {
+        if (Context.Guild == null)
+        {
+            await RespondAsync("❌ This command can only be used in a server.", ephemeral: true).ConfigureAwait(false);
+            return;
+        }
+        var member = Context.User as SocketGuildUser;
+        if (member == null || (!member.GuildPermissions.ManageGuild && !member.GuildPermissions.Administrator))
+        {
+            await RespondAsync("❌ You need **Manage Server** permission to post the builder panel.", ephemeral: true).ConfigureAwait(false);
+            return;
+        }
+        await DeferAsync(ephemeral: true).ConfigureAwait(false);
+        await Context.Channel.SendMessageAsync(embed: BuildPanelEmbed(), components: BuildPanelComponents()).ConfigureAwait(false);
+        await FollowupAsync("✅ Builder panel posted! Pin it so it stays at the top.", ephemeral: true).ConfigureAwait(false);
+    }
+
+    // Kept as fallback — slash commands still work alongside the panel
     [SlashCommand("pokebuild", "Build a Scarlet/Violet Pokémon step by step")]
     public async Task PokeBuildSVAsync()
         => await StartBuilderAsync("sv").ConfigureAwait(false);
@@ -122,6 +142,19 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
     [SlashCommand("pokebuild-bdsp", "Build a BDSP Pokémon step by step")]
     public async Task PokeBuildBDSPAsync()
         => await StartBuilderAsync("bdsp").ConfigureAwait(false);
+
+    // ─── Panel button → open builder ─────────────────────────────────────────
+
+    [ComponentInteraction("pb_start_*")]
+    public async Task OnPanelStartAsync(string gameType)
+    {
+        if (Context.Guild == null)
+        {
+            await RespondAsync("❌ This can only be used in a server.", ephemeral: true).ConfigureAwait(false);
+            return;
+        }
+        await RespondWithModalAsync<PokeBuildBasicModal>($"pb_basic_{gameType}").ConfigureAwait(false);
+    }
 
     private async Task StartBuilderAsync(string gameType)
     {
@@ -530,5 +563,35 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
                 await msg.DeleteAsync().ConfigureAwait(false);
         }
         catch { /* already deleted */ }
+    }
+
+    // ─── Panel embed & components ─────────────────────────────────────────────
+
+    private static Embed BuildPanelEmbed()
+    {
+        return new EmbedBuilder()
+            .WithTitle("🔨 Pokémon Builder")
+            .WithColor(Color.Gold)
+            .WithDescription(
+                "Want a Pokémon? Click the button for your game below!\n\n" +
+                "You'll be guided step by step — no commands needed. " +
+                "Fill in the name, level, IVs, moves, and more, then hit **Submit Trade** to get in the queue!\n​")
+            .AddField("🐾 What you can set",
+                "Species • Level • Nature • Shiny ✨\n" +
+                "IVs & EVs • Held Item • Poké Ball • Moves ⚔️\n" +
+                "Tera Type 🧬 (SV) • Alpha ⭐ (LA/PLZA)", inline: false)
+            .WithFooter($"PokedexMasterBot {TradeBot.Version} • Tap a button to start building!")
+            .Build();
+    }
+
+    private static MessageComponent BuildPanelComponents()
+    {
+        return new ComponentBuilder()
+            .WithButton("🟣 Scarlet / Violet",  "pb_start_sv",   ButtonStyle.Primary,   row: 0)
+            .WithButton("🏔️ Legends: Arceus",   "pb_start_la",   ButtonStyle.Primary,   row: 0)
+            .WithButton("🗼 Legends: Z-A",       "pb_start_plza", ButtonStyle.Primary,   row: 0)
+            .WithButton("⚔️ Sword / Shield",     "pb_start_swsh", ButtonStyle.Secondary, row: 1)
+            .WithButton("💎 BDSP",               "pb_start_bdsp", ButtonStyle.Secondary, row: 1)
+            .Build();
     }
 }
