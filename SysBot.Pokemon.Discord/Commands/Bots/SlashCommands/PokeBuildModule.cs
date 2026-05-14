@@ -57,23 +57,36 @@ internal static class BuilderData
             "lgpe" => PersonalTable.GG,
             _      => PersonalTable.SV,
         };
+        // PLZA is Gen 9 and shares HOME compatibility with SV; union both tables so
+        // SV-transferrable species (e.g. Mew, Jirachi) and ZA-exclusives (Xerneas,
+        // Yveltal, Zygarde, Marshadow…) all appear.
+        IPersonalTable? extra = gameType == "plza" ? PersonalTable.SV : null;
+
         var ctx     = GameContext(gameType);
         var strings = GameInfo.GetStrings("en");
         var list    = new List<(string Display, string Value)>();
-        var maxSp   = table.MaxSpeciesID;
+        ushort maxSp = extra is not null
+            ? (ushort)Math.Max(table.MaxSpeciesID, extra.MaxSpeciesID)
+            : table.MaxSpeciesID;
 
         for (ushort sp = 1; sp <= maxSp; sp++)
         {
             var name = ((Species)sp).ToString();
             if (name is "None" or "Egg") continue;
 
-            var formCount = table[sp].FormCount;
-            var formList  = FormConverter.GetFormList(sp, strings.Types, strings.forms,
+            // Take the highest FormCount across both tables for this species
+            int formCount = sp <= table.MaxSpeciesID ? table[sp].FormCount : 0;
+            if (extra is not null && sp <= extra.MaxSpeciesID)
+                formCount = Math.Max(formCount, extra[sp].FormCount);
+
+            var formList = FormConverter.GetFormList(sp, strings.Types, strings.forms,
                 GameInfo.GenderSymbolASCII, ctx);
 
             for (byte form = 0; form < formCount; form++)
             {
-                if (!table.IsPresentInGame(sp, form)) continue;
+                bool present = (sp <= table.MaxSpeciesID && table.IsPresentInGame(sp, form))
+                            || (extra is not null && sp <= extra.MaxSpeciesID && extra.IsPresentInGame(sp, form));
+                if (!present) continue;
                 var formName = formList.Length > form ? formList[form] : string.Empty;
                 if (form > 0 && string.IsNullOrWhiteSpace(formName)) continue;
                 if (ForbiddenForms.IsForbidden(sp, form, formName)) continue;
