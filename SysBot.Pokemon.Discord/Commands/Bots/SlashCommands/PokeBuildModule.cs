@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 
 namespace SysBot.Pokemon.Discord.Commands.Bots.SlashCommands;
 
-// ─── Cached game data (built once per game type, held for the process lifetime) ─
+// ─── Cached game data ───────────────────────────────────────────────────────────
 internal static class BuilderData
 {
     private const int PageSize = 24;
@@ -23,7 +23,10 @@ internal static class BuilderData
         SpeciesCache = new();
     private static readonly ConcurrentDictionary<string, IReadOnlyList<string>>
         ItemCache = new();
-    private static IReadOnlyList<string>? _moves;
+    private static readonly ConcurrentDictionary<(string Game, ushort Species, byte Form), IReadOnlyList<int>>
+        LevelCache = new();
+    private static readonly ConcurrentDictionary<string, IReadOnlyList<object>>
+        EncounterAreasCache = new();
 
     public static IReadOnlyList<(string Display, string Value)> GetSpecies(string gameType)
         => SpeciesCache.GetOrAdd(gameType, BuildSpecies);
@@ -31,16 +34,8 @@ internal static class BuilderData
     public static IReadOnlyList<string> GetItems(string gameType)
         => ItemCache.GetOrAdd(gameType, BuildItems);
 
-    public static IReadOnlyList<string> GetMoves()
-        => _moves ??= BuildMoves();
-
-    private static IReadOnlyList<string> BuildMoves()
-        => GameInfo.GetStrings("en").movelist
-            .Select((name, idx) => (name, idx))
-            .Where(x => x.idx > 0 && !string.IsNullOrEmpty(x.name))
-            .OrderBy(x => x.name)
-            .Select(x => x.name)
-            .ToList();
+    public static IReadOnlyList<int> GetLegalLevels(string gameType, ushort species, byte form)
+        => LevelCache.GetOrAdd((gameType, species, form), k => BuildLegalLevels(k.Game, k.Species, k.Form));
 
     public static int TotalPages(int count) => Math.Max(1, (int)Math.Ceiling(count / (double)PageSize));
 
@@ -107,9 +102,9 @@ internal static class BuilderData
     {
         var ctx = gameType switch
         {
-            "la"           => EntityContext.Gen8a,
+            "la"             => EntityContext.Gen8a,
             "swsh" or "bdsp" => EntityContext.Gen8,
-            _              => EntityContext.Gen9,
+            _                => EntityContext.Gen9,
         };
         return GameInfo.GetStrings("en").Item
             .Select((name, idx) => (name, idx))
@@ -123,59 +118,11 @@ internal static class BuilderData
             .ToList();
     }
 
-    // ── Moves (per species, cached) ───────────────────────────────────────────
-
-    private static readonly ConcurrentDictionary<(string Game, ushort Species, byte Form), IReadOnlyList<string>>
-        MovesForSpeciesCache = new();
-
-    public static IReadOnlyList<string> GetMovesForSpecies(string gameType, ushort species, byte form)
-        => MovesForSpeciesCache.GetOrAdd((gameType, species, form), k => BuildMovesForSpecies(k.Game, k.Species, k.Form));
-
-    private static IReadOnlyList<string> BuildMovesForSpecies(string gameType, ushort species, byte form)
-    {
-        var moveNames = GameInfo.GetStrings("en").movelist;
-        var result    = new bool[moveNames.Length];
-        var evo       = new EvoCriteria { Species = species, Form = form, LevelMax = 100, LevelMin = 1 };
-
-        switch (gameType)
-        {
-            case "sv":   LearnSource9SV.Instance.GetAllMoves(result,   new PK9(), evo, MoveSourceType.All); break;
-            case "la":   LearnSource8LA.Instance.GetAllMoves(result,   new PA8(), evo, MoveSourceType.All); break;
-            case "plza": LearnSource9ZA.Instance.GetAllMoves(result,   new PA9(), evo, MoveSourceType.All); break;
-            case "swsh": LearnSource8SWSH.Instance.GetAllMoves(result, new PK8(), evo, MoveSourceType.All); break;
-            case "bdsp": LearnSource8BDSP.Instance.GetAllMoves(result, new PB8(), evo, MoveSourceType.All); break;
-        }
-
-        return result
-            .Select((can, i) => (can, i))
-            .Where(x => x.can && x.i > 0 && x.i < moveNames.Length && !string.IsNullOrEmpty(moveNames[x.i]))
-            .OrderBy(x => moveNames[x.i])
-            .Select(x => moveNames[x.i])
-            .ToList();
-    }
-
-    // ── EntityContext per game ────────────────────────────────────────────────
-
-    public static EntityContext GameContext(string gameType) => gameType switch
-    {
-        "la"           => EntityContext.Gen8a,
-        "swsh"         => EntityContext.Gen8,
-        "bdsp"         => EntityContext.Gen8b,
-        _              => EntityContext.Gen9,
-    };
-
-    // ── Legal Levels (per species, cached) ───────────────────────────────────
-
-    private static readonly ConcurrentDictionary<(string Game, ushort Species, byte Form), IReadOnlyList<int>>
-        LevelCache = new();
-
-    public static IReadOnlyList<int> GetLegalLevels(string gameType, ushort species, byte form)
-        => LevelCache.GetOrAdd((gameType, species, form), k => BuildLegalLevels(k.Game, k.Species, k.Form));
+    // ── Legal Levels (per species) ────────────────────────────────────────────
 
     private static IReadOnlyList<int> BuildLegalLevels(string gameType, ushort species, byte form)
     {
         var min = GetMinLevel(gameType, species, form);
-        // Always include the exact minimum, then multiples of 5 up to 100
         return Enumerable.Range(min, 101 - min)
             .Where(l => l == min || l % 5 == 0)
             .ToList();
@@ -192,99 +139,128 @@ internal static class BuilderData
             _      => PersonalTable.SV,
         };
         var info = table[species];
-        // EggGroup1 == 15 = Undiscovered; anything else means the species can hatch from an egg → level 1 is legal
+        // EggGroup1 = 15 → Undiscovered (can't breed, can't hatch at level 1)
         var eg1Prop = info.GetType().GetProperty("EggGroup1",
             BindingFlags.Public | BindingFlags.Instance);
         if (eg1Prop?.GetValue(info) is int eg1 && eg1 != 15)
             return 1;
 
-        // Undiscovered (legendary/mythical) — scan wild encounter slots for real minimum
         return GetMinEncounterLevel(gameType, species, form);
     }
 
     private static int GetMinEncounterLevel(string gameType, ushort species, byte form)
     {
-        // Class names for each game's encounter database
-        var encClassName = gameType switch
-        {
-            "la"   => "PKHeX.Core.Encounters8a",
-            "swsh" => "PKHeX.Core.Encounters8",
-            "bdsp" => "PKHeX.Core.Encounters8b",
-            _      => "PKHeX.Core.Encounters9",   // sv and plza both use Gen9 class
-        };
+        var areas     = GetEncounterAreas(gameType);
+        var instFlags = BindingFlags.Public | BindingFlags.Instance;
+        int minLevel  = int.MaxValue;
 
+        foreach (var area in areas)
+        {
+            if (area.GetType().GetProperty("Slots", instFlags)?.GetValue(area)
+                is not IEnumerable slots)
+                continue;
+
+            foreach (var slot in slots)
+            {
+                var t = slot.GetType();
+                var rawSp   = t.GetProperty("Species", instFlags)?.GetValue(slot);
+                var slotSp  = rawSp  switch { ushort u => u, int i => (ushort)i, _ => (ushort)0 };
+                if (slotSp != species) continue;
+
+                var rawForm   = t.GetProperty("Form", instFlags)?.GetValue(slot);
+                var slotForm  = rawForm switch { byte b => b, int i => (byte)i, _ => (byte)0 };
+                if (slotForm != 0 && slotForm != form) continue;
+
+                var rawMin = t.GetProperty("LevelMin", instFlags)?.GetValue(slot);
+                var lmin   = rawMin switch { byte b => (int)b, int i => i, _ => 1 };
+                if (lmin < minLevel) minLevel = lmin;
+            }
+        }
+
+        return minLevel == int.MaxValue ? 1 : minLevel;
+    }
+
+    // Scans the entire PKHeX assembly for static EncounterArea* array fields.
+    // Cached per game type so the reflection only runs once per game.
+    private static IReadOnlyList<object> GetEncounterAreas(string gameType)
+        => EncounterAreasCache.GetOrAdd(gameType, LoadEncounterAreas);
+
+    private static IReadOnlyList<object> LoadEncounterAreas(string gameType)
+    {
         try
         {
-            var assembly = typeof(PersonalTable).Assembly;
-            var encType  = assembly.GetType(encClassName);
-            if (encType == null) return 1;
-
-            // "Slots" is typically internal static — use NonPublic to reach it
-            var slotsField = encType.GetField("Slots",
-                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            if (slotsField == null) return 1;
-
-            if (slotsField.GetValue(null) is not IEnumerable areas) return 1;
-
-            var instFlags = BindingFlags.Public | BindingFlags.Instance;
-            int minLevel  = int.MaxValue;
-
-            foreach (var area in areas)
+            var assembly      = typeof(PersonalTable).Assembly;
+            var areaTypeName  = gameType switch
             {
-                if (area.GetType().GetProperty("Slots", instFlags)?.GetValue(area)
-                    is not IEnumerable slots)
-                    continue;
+                "la"   => "PKHeX.Core.EncounterArea8a",
+                "swsh" => "PKHeX.Core.EncounterArea8",
+                "bdsp" => "PKHeX.Core.EncounterArea8b",
+                _      => "PKHeX.Core.EncounterArea9",
+            };
+            var areaType = assembly.GetType(areaTypeName);
+            if (areaType == null) return [];
 
-                foreach (var slot in slots)
+            var areaArrayType = areaType.MakeArrayType();
+            var allAreas      = new List<object>();
+            var bindAll       = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+            // Only check types that look like encounter databases
+            foreach (var type in assembly.GetTypes()
+                .Where(t => t.IsAbstract && t.IsSealed
+                    && (t.Name.StartsWith("Encounter") || t.Name.StartsWith("Encounters"))))
+            {
+                FieldInfo[] fields;
+                try { fields = type.GetFields(bindAll); }
+                catch { continue; }
+
+                foreach (var field in fields.Where(f => f.FieldType == areaArrayType))
                 {
-                    var t = slot.GetType();
+                    object? value;
+                    try { value = field.GetValue(null); }
+                    catch { continue; }
 
-                    // Match species
-                    var rawSp = t.GetProperty("Species", instFlags)?.GetValue(slot);
-                    var slotSp = rawSp switch { ushort u => u, int i => (ushort)i, _ => (ushort)0 };
-                    if (slotSp != species) continue;
-
-                    // Match form (form 0 slots are valid for any form request)
-                    var rawForm = t.GetProperty("Form", instFlags)?.GetValue(slot);
-                    var slotForm = rawForm switch { byte b => b, int i => (byte)i, _ => (byte)0 };
-                    if (slotForm != 0 && slotForm != form) continue;
-
-                    var rawMin = t.GetProperty("LevelMin", instFlags)?.GetValue(slot);
-                    var lmin   = rawMin switch { byte b => (int)b, int i => i, _ => 1 };
-                    if (lmin < minLevel) minLevel = lmin;
+                    if (value is not IEnumerable areas) continue;
+                    foreach (var area in areas)
+                        allAreas.Add(area);
                 }
             }
-
-            return minLevel == int.MaxValue ? 1 : minLevel;
+            return allAreas;
         }
-        catch
-        {
-            return 1;
-        }
+        catch { return []; }
     }
+
+    // ── EntityContext per game ────────────────────────────────────────────────
+
+    public static EntityContext GameContext(string gameType) => gameType switch
+    {
+        "la"   => EntityContext.Gen8a,
+        "swsh" => EntityContext.Gen8,
+        "bdsp" => EntityContext.Gen8b,
+        _      => EntityContext.Gen9,
+    };
 }
+
+// ─── Wizard step ───────────────────────────────────────────────────────────────
+public enum BuilderStep { Species, Alpha, Shiny, Level, Item, Nature, Ball, IV, EV, Confirm }
 
 // ─── Session state ─────────────────────────────────────────────────────────────
 public class PokemonBuilderState
 {
-    public string GameType       = "sv";
-    public string Species        = "";   // "EnumName|form|DisplayName"
-    public string SpeciesDisplay = "";
-    public int    Level          = 50;
-    public string Nature         = "";
-    public bool   Shiny          = false;
-    public bool   Alpha          = false;
-    public string Item           = "";
-    public string Ball           = "";
-    public string Move1 = "", Move2 = "", Move3 = "", Move4 = "";
-    public string TeraType       = "";
-    public ulong  MessageId      = 0;
-
-    // Picker state
-    public int SpeciesPage = 0;
-    public int ItemPage    = 0;
-    public int MovePage    = 0;
-    public int MoveStep    = 0;   // 0-3
+    public string      GameType       = "sv";
+    public string      Species        = "";
+    public string      SpeciesDisplay = "";
+    public int         Level          = 50;
+    public string      Nature         = "";
+    public bool        Shiny          = false;
+    public bool        Alpha          = false;
+    public string      Item           = "";
+    public string      Ball           = "";
+    public string      IVs            = "31/31/31/31/31/31";
+    public string      EVs            = "";
+    public ulong       MessageId      = 0;
+    public BuilderStep Step           = BuilderStep.Species;
+    public int         SpeciesPage    = 0;
+    public int         ItemPage       = 0;
 }
 
 // ─── Module ────────────────────────────────────────────────────────────────────
@@ -292,16 +268,93 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
 {
     private static readonly ConcurrentDictionary<ulong, PokemonBuilderState> Sessions = new();
 
-    private static readonly string[] TeraTypes =
+    // ── IV / EV presets ───────────────────────────────────────────────────────
+
+    private static readonly (string Label, string Desc, string Value)[] IVPresets =
     [
-        "Normal","Fire","Water","Electric","Grass","Ice",
-        "Fighting","Poison","Ground","Flying","Psychic","Bug",
-        "Rock","Ghost","Dragon","Dark","Steel","Fairy","Stellar",
+        ("⭐ Perfect",       "HP 31 / Atk 31 / Def 31 / SpA 31 / SpD 31 / Spe 31", "31/31/31/31/31/31"),
+        ("🔵 Sp. Attacker",  "No Atk IVs — ideal for special attackers",            "31/0/31/31/31/31"),
+        ("🔴 Physical",      "No SpA IVs — ideal for physical attackers",            "31/31/31/0/31/31"),
+        ("⏰ TR Physical",   "No SpA, no Spe — Trick Room physical",                 "31/31/31/0/31/0"),
+        ("⏰ TR Special",    "No Atk, no Spe — Trick Room special",                  "31/0/31/31/31/0"),
+        ("⭕ Min All",       "All 0 IVs",                                            "0/0/0/0/0/0"),
     ];
 
-    private enum PickerMode { Builder, Species, Item, Move }
+    private static readonly (string Label, string Desc, string Value)[] EVPresets =
+    [
+        ("⛔ None",          "No EVs",                                              ""),
+        ("⚡ Atk + Spe",     "252 Atk / 252 Spe / 4 HP — physical sweeper",        "4/252/0/0/0/252"),
+        ("🌀 SpA + Spe",     "252 SpA / 252 Spe / 4 HP — special sweeper",         "4/0/0/252/0/252"),
+        ("🛡️ HP + Def",      "252 HP / 252 Def / 4 SpD — physical wall",            "252/0/252/0/4/0"),
+        ("✨ HP + SpD",      "252 HP / 252 SpD / 4 Def — special wall",             "252/0/4/0/252/0"),
+        ("💪 HP + Atk",      "252 HP / 252 Atk / 4 Def — bulky physical",           "252/252/4/0/0/0"),
+        ("🔮 HP + SpA",      "252 HP / 252 SpA / 4 SpD — bulky special",            "252/0/0/252/4/0"),
+        ("⏰ TR Atk + HP",   "252 HP / 252 Atk / 4 SpD — Trick Room physical",      "252/252/0/0/4/0"),
+        ("⏰ TR SpA + HP",   "252 HP / 252 SpA / 4 Def — Trick Room special",       "252/0/4/252/0/0"),
+    ];
 
-    // ─── Session check helper ─────────────────────────────────────────────────
+    // ── Step navigation ───────────────────────────────────────────────────────
+
+    private static BuilderStep NextStep(BuilderStep current, string gameType) => current switch
+    {
+        BuilderStep.Species => gameType is "la" or "plza" ? BuilderStep.Alpha : BuilderStep.Shiny,
+        BuilderStep.Alpha   => BuilderStep.Shiny,
+        BuilderStep.Shiny   => BuilderStep.Level,
+        BuilderStep.Level   => BuilderStep.Item,
+        BuilderStep.Item    => BuilderStep.Nature,
+        BuilderStep.Nature  => BuilderStep.Ball,
+        BuilderStep.Ball    => BuilderStep.IV,
+        BuilderStep.IV      => BuilderStep.EV,
+        BuilderStep.EV      => BuilderStep.Confirm,
+        _                   => BuilderStep.Confirm,
+    };
+
+    private static BuilderStep PrevStep(BuilderStep current, string gameType) => current switch
+    {
+        BuilderStep.Alpha   => BuilderStep.Species,
+        BuilderStep.Shiny   => gameType is "la" or "plza" ? BuilderStep.Alpha : BuilderStep.Species,
+        BuilderStep.Level   => BuilderStep.Shiny,
+        BuilderStep.Item    => BuilderStep.Level,
+        BuilderStep.Nature  => BuilderStep.Item,
+        BuilderStep.Ball    => BuilderStep.Nature,
+        BuilderStep.IV      => BuilderStep.Ball,
+        BuilderStep.EV      => BuilderStep.IV,
+        BuilderStep.Confirm => BuilderStep.EV,
+        _                   => BuilderStep.Species,
+    };
+
+    private static int StepNumber(BuilderStep step, string gameType)
+    {
+        bool a = gameType is "la" or "plza";
+        return (step, a) switch
+        {
+            (BuilderStep.Species, _)    => 1,
+            (BuilderStep.Alpha,   true) => 2,
+            (BuilderStep.Shiny,   true) => 3,
+            (BuilderStep.Shiny,  false) => 2,
+            (BuilderStep.Level,   true) => 4,
+            (BuilderStep.Level,  false) => 3,
+            (BuilderStep.Item,    true) => 5,
+            (BuilderStep.Item,   false) => 4,
+            (BuilderStep.Nature,  true) => 6,
+            (BuilderStep.Nature, false) => 5,
+            (BuilderStep.Ball,    true) => 7,
+            (BuilderStep.Ball,   false) => 6,
+            (BuilderStep.IV,      true) => 8,
+            (BuilderStep.IV,     false) => 7,
+            (BuilderStep.EV,      true) => 9,
+            (BuilderStep.EV,     false) => 8,
+            (BuilderStep.Confirm, true) => 10,
+            _                           => 9,
+        };
+    }
+
+    private static int TotalSteps(string gameType) => gameType is "la" or "plza" ? 10 : 9;
+
+    private static string Header(PokemonBuilderState s) =>
+        $"{PokeBuildPanelManager.GetGameLabel()} · Step {StepNumber(s.Step, s.GameType)}/{TotalSteps(s.GameType)}";
+
+    // ── Session check ─────────────────────────────────────────────────────────
 
     private async Task<(bool ok, ulong userId, PokemonBuilderState session)> CheckAsync(string userIdStr)
     {
@@ -324,7 +377,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         return (true, userId, session);
     }
 
-    // ─── Panel button ─────────────────────────────────────────────────────────
+    // ── Panel button ──────────────────────────────────────────────────────────
 
     [ComponentInteraction("pb_start")]
     public async Task OnPanelStartAsync()
@@ -336,19 +389,21 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         }
         await DeferAsync(ephemeral: false).ConfigureAwait(false);
 
-        var userId   = Context.User.Id;
-        var gameType = PokeBuildPanelManager.CurrentGameType;
-        var session  = new PokemonBuilderState { GameType = gameType };
-        Sessions[userId] = session;
+        var session = new PokemonBuilderState
+        {
+            GameType = PokeBuildPanelManager.CurrentGameType,
+            Step     = BuilderStep.Species,
+        };
+        Sessions[Context.User.Id] = session;
 
         var msg = await FollowupAsync(
-            embed: SpeciesPickerEmbed(session),
-            components: SpeciesPickerComponents(session, userId)
+            embed: StepEmbed(session),
+            components: StepComponents(session, Context.User.Id)
         ).ConfigureAwait(false);
         session.MessageId = msg.Id;
     }
 
-    // ─── Species picker ───────────────────────────────────────────────────────
+    // ── Species ───────────────────────────────────────────────────────────────
 
     [ComponentInteraction("pb_spec_sel_*")]
     public async Task OnSpeciesSelectAsync(string userIdStr)
@@ -361,17 +416,17 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         session.Species        = value;
         session.SpeciesDisplay = parts.ElementAtOrDefault(2) ?? parts.ElementAtOrDefault(0) ?? value;
 
-        // Clamp level to what's legal for this species
         var (sp, form) = ParseSpeciesForm(value);
         if (sp > 0)
         {
             var legal = BuilderData.GetLegalLevels(session.GameType, sp, form);
             if (legal.Count > 0 && !legal.Contains(session.Level))
-                session.Level = legal[0]; // snap to minimum legal level
+                session.Level = legal[0];
         }
 
+        session.Step = NextStep(BuilderStep.Species, session.GameType);
         await DeferAsync().ConfigureAwait(false);
-        await UpdateAsync(session, userId, PickerMode.Builder).ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
     [ComponentInteraction("pb_spec_prev_*")]
@@ -381,7 +436,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         if (!ok) return;
         await DeferAsync().ConfigureAwait(false);
         session.SpeciesPage = Math.Max(0, session.SpeciesPage - 1);
-        await UpdateAsync(session, userId, PickerMode.Species).ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
     [ComponentInteraction("pb_spec_next_*")]
@@ -392,30 +447,83 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         await DeferAsync().ConfigureAwait(false);
         var total = BuilderData.TotalPages(BuilderData.GetSpecies(session.GameType).Count);
         session.SpeciesPage = Math.Min(total - 1, session.SpeciesPage + 1);
-        await UpdateAsync(session, userId, PickerMode.Species).ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
-    // ─── Item picker ──────────────────────────────────────────────────────────
+    // ── Alpha ─────────────────────────────────────────────────────────────────
 
-    [ComponentInteraction("pb_item_*")]
-    public async Task OnItemButtonAsync(string userIdStr)
+    [ComponentInteraction("pb_alpha_yes_*")]
+    public async Task OnAlphaYesAsync(string userIdStr)
     {
         var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
         if (!ok) return;
+        session.Alpha = true;
+        session.Step  = NextStep(BuilderStep.Alpha, session.GameType);
         await DeferAsync().ConfigureAwait(false);
-        session.ItemPage = 0;
-        await UpdateAsync(session, userId, PickerMode.Item).ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
     }
+
+    [ComponentInteraction("pb_alpha_no_*")]
+    public async Task OnAlphaNoAsync(string userIdStr)
+    {
+        var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
+        if (!ok) return;
+        session.Alpha = false;
+        session.Step  = NextStep(BuilderStep.Alpha, session.GameType);
+        await DeferAsync().ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
+    }
+
+    // ── Shiny ─────────────────────────────────────────────────────────────────
+
+    [ComponentInteraction("pb_shiny_yes_*")]
+    public async Task OnShinyYesAsync(string userIdStr)
+    {
+        var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
+        if (!ok) return;
+        session.Shiny = true;
+        session.Step  = NextStep(BuilderStep.Shiny, session.GameType);
+        await DeferAsync().ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
+    }
+
+    [ComponentInteraction("pb_shiny_no_*")]
+    public async Task OnShinyNoAsync(string userIdStr)
+    {
+        var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
+        if (!ok) return;
+        session.Shiny = false;
+        session.Step  = NextStep(BuilderStep.Shiny, session.GameType);
+        await DeferAsync().ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
+    }
+
+    // ── Level ─────────────────────────────────────────────────────────────────
+
+    [ComponentInteraction("pb_level_*")]
+    public async Task OnLevelSelectAsync(string userIdStr)
+    {
+        var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
+        if (!ok) return;
+        var value = ((SocketMessageComponent)Context.Interaction).Data.Values.FirstOrDefault();
+        if (int.TryParse(value, out var lvl))
+            session.Level = Math.Clamp(lvl, 1, 100);
+        session.Step = NextStep(BuilderStep.Level, session.GameType);
+        await DeferAsync().ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
+    }
+
+    // ── Item ──────────────────────────────────────────────────────────────────
 
     [ComponentInteraction("pb_isel_*")]
     public async Task OnItemSelectAsync(string userIdStr)
     {
         var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
         if (!ok) return;
-        var value = ((SocketMessageComponent)Context.Interaction).Data.Values.FirstOrDefault() ?? "";
-        session.Item = value;
+        session.Item = ((SocketMessageComponent)Context.Interaction).Data.Values.FirstOrDefault() ?? "";
+        session.Step = NextStep(BuilderStep.Item, session.GameType);
         await DeferAsync().ConfigureAwait(false);
-        await UpdateAsync(session, userId, PickerMode.Builder).ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
     [ComponentInteraction("pb_iclear_*")]
@@ -424,8 +532,9 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
         if (!ok) return;
         session.Item = "";
+        session.Step = NextStep(BuilderStep.Item, session.GameType);
         await DeferAsync().ConfigureAwait(false);
-        await UpdateAsync(session, userId, PickerMode.Builder).ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
     [ComponentInteraction("pb_iprev_*")]
@@ -435,7 +544,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         if (!ok) return;
         await DeferAsync().ConfigureAwait(false);
         session.ItemPage = Math.Max(0, session.ItemPage - 1);
-        await UpdateAsync(session, userId, PickerMode.Item).ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
     [ComponentInteraction("pb_inext_*")]
@@ -446,101 +555,10 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         await DeferAsync().ConfigureAwait(false);
         var total = BuilderData.TotalPages(BuilderData.GetItems(session.GameType).Count);
         session.ItemPage = Math.Min(total - 1, session.ItemPage + 1);
-        await UpdateAsync(session, userId, PickerMode.Item).ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
-    [ComponentInteraction("pb_iback_*")]
-    public async Task OnItemBackAsync(string userIdStr)
-    {
-        var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
-        if (!ok) return;
-        await DeferAsync().ConfigureAwait(false);
-        await UpdateAsync(session, userId, PickerMode.Builder).ConfigureAwait(false);
-    }
-
-    // ─── Move picker ──────────────────────────────────────────────────────────
-
-    [ComponentInteraction("pb_moves_*")]
-    public async Task OnMovesButtonAsync(string userIdStr)
-    {
-        var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
-        if (!ok) return;
-        await DeferAsync().ConfigureAwait(false);
-        session.MoveStep = 0;
-        session.MovePage = 0;
-        await UpdateAsync(session, userId, PickerMode.Move).ConfigureAwait(false);
-    }
-
-    [ComponentInteraction("pb_msel_*")]
-    public async Task OnMoveSelectAsync(string userIdStr)
-    {
-        var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
-        if (!ok) return;
-        var value = ((SocketMessageComponent)Context.Interaction).Data.Values.FirstOrDefault() ?? "";
-        SetMove(session, session.MoveStep, value);
-        await DeferAsync().ConfigureAwait(false);
-        session.MoveStep++;
-        session.MovePage = 0;
-        var mode = session.MoveStep >= 4 ? PickerMode.Builder : PickerMode.Move;
-        await UpdateAsync(session, userId, mode).ConfigureAwait(false);
-    }
-
-    [ComponentInteraction("pb_mprev_*")]
-    public async Task OnMovePrevAsync(string userIdStr)
-    {
-        var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
-        if (!ok) return;
-        await DeferAsync().ConfigureAwait(false);
-        session.MovePage = Math.Max(0, session.MovePage - 1);
-        await UpdateAsync(session, userId, PickerMode.Move).ConfigureAwait(false);
-    }
-
-    [ComponentInteraction("pb_mnext_*")]
-    public async Task OnMoveNextAsync(string userIdStr)
-    {
-        var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
-        if (!ok) return;
-        await DeferAsync().ConfigureAwait(false);
-        var total = BuilderData.TotalPages(GetSessionMoves(session).Count);
-        session.MovePage = Math.Min(total - 1, session.MovePage + 1);
-        await UpdateAsync(session, userId, PickerMode.Move).ConfigureAwait(false);
-    }
-
-    [ComponentInteraction("pb_mskip_*")]
-    public async Task OnMoveSkipAsync(string userIdStr)
-    {
-        var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
-        if (!ok) return;
-        await DeferAsync().ConfigureAwait(false);
-        SetMove(session, session.MoveStep, "");
-        session.MoveStep++;
-        session.MovePage = 0;
-        var mode = session.MoveStep >= 4 ? PickerMode.Builder : PickerMode.Move;
-        await UpdateAsync(session, userId, mode).ConfigureAwait(false);
-    }
-
-    [ComponentInteraction("pb_mback_*")]
-    public async Task OnMoveBackAsync(string userIdStr)
-    {
-        var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
-        if (!ok) return;
-        await DeferAsync().ConfigureAwait(false);
-        await UpdateAsync(session, userId, PickerMode.Builder).ConfigureAwait(false);
-    }
-
-    // ─── Builder dropdowns ────────────────────────────────────────────────────
-
-    [ComponentInteraction("pb_level_*")]
-    public async Task OnLevelSelectAsync(string userIdStr)
-    {
-        var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
-        if (!ok) return;
-        var value = ((SocketMessageComponent)Context.Interaction).Data.Values.FirstOrDefault();
-        if (int.TryParse(value, out var lvl))
-            session.Level = Math.Clamp(lvl, 1, 100);
-        await DeferAsync().ConfigureAwait(false);
-        await UpdateAsync(session, userId, PickerMode.Builder).ConfigureAwait(false);
-    }
+    // ── Nature ────────────────────────────────────────────────────────────────
 
     [ComponentInteraction("pb_nature_*")]
     public async Task OnNatureSelectAsync(string userIdStr)
@@ -548,9 +566,12 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
         if (!ok) return;
         session.Nature = ((SocketMessageComponent)Context.Interaction).Data.Values.FirstOrDefault() ?? "";
+        session.Step   = NextStep(BuilderStep.Nature, session.GameType);
         await DeferAsync().ConfigureAwait(false);
-        await UpdateAsync(session, userId, PickerMode.Builder).ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
     }
+
+    // ── Ball ──────────────────────────────────────────────────────────────────
 
     [ComponentInteraction("pb_ball_*")]
     public async Task OnBallSelectAsync(string userIdStr)
@@ -558,43 +579,51 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
         if (!ok) return;
         session.Ball = ((SocketMessageComponent)Context.Interaction).Data.Values.FirstOrDefault() ?? "";
+        session.Step = NextStep(BuilderStep.Ball, session.GameType);
         await DeferAsync().ConfigureAwait(false);
-        await UpdateAsync(session, userId, PickerMode.Builder).ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
-    [ComponentInteraction("pb_tera_*")]
-    public async Task OnTeraSelectAsync(string userIdStr)
+    // ── IVs ───────────────────────────────────────────────────────────────────
+
+    [ComponentInteraction("pb_iv_*")]
+    public async Task OnIVSelectAsync(string userIdStr)
     {
         var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
         if (!ok) return;
-        session.TeraType = ((SocketMessageComponent)Context.Interaction).Data.Values.FirstOrDefault() ?? "";
+        session.IVs  = ((SocketMessageComponent)Context.Interaction).Data.Values.FirstOrDefault() ?? "31/31/31/31/31/31";
+        session.Step = NextStep(BuilderStep.IV, session.GameType);
         await DeferAsync().ConfigureAwait(false);
-        await UpdateAsync(session, userId, PickerMode.Builder).ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
-    // ─── Builder toggle buttons ───────────────────────────────────────────────
+    // ── EVs ───────────────────────────────────────────────────────────────────
 
-    [ComponentInteraction("pb_shiny_*")]
-    public async Task OnShinyToggleAsync(string userIdStr)
+    [ComponentInteraction("pb_ev_*")]
+    public async Task OnEVSelectAsync(string userIdStr)
+    {
+        var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
+        if (!ok) return;
+        var raw      = ((SocketMessageComponent)Context.Interaction).Data.Values.FirstOrDefault() ?? "_none_";
+        session.EVs  = raw == "_none_" ? "" : raw;
+        session.Step = NextStep(BuilderStep.EV, session.GameType);
+        await DeferAsync().ConfigureAwait(false);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
+    }
+
+    // ── Back ──────────────────────────────────────────────────────────────────
+
+    [ComponentInteraction("pb_back_*")]
+    public async Task OnBackAsync(string userIdStr)
     {
         var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
         if (!ok) return;
         await DeferAsync().ConfigureAwait(false);
-        session.Shiny = !session.Shiny;
-        await UpdateAsync(session, userId, PickerMode.Builder).ConfigureAwait(false);
+        session.Step = PrevStep(session.Step, session.GameType);
+        await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
-    [ComponentInteraction("pb_alpha_*")]
-    public async Task OnAlphaToggleAsync(string userIdStr)
-    {
-        var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
-        if (!ok) return;
-        await DeferAsync().ConfigureAwait(false);
-        session.Alpha = !session.Alpha;
-        await UpdateAsync(session, userId, PickerMode.Builder).ConfigureAwait(false);
-    }
-
-    // ─── Submit / Cancel ──────────────────────────────────────────────────────
+    // ── Submit / Cancel ───────────────────────────────────────────────────────
 
     [ComponentInteraction("pb_submit_*")]
     public async Task OnSubmitAsync(string userIdStr)
@@ -612,7 +641,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         if (string.IsNullOrWhiteSpace(session.Species))
         {
             await RespondAsync("❌ No Pokémon selected.", ephemeral: true).ConfigureAwait(false);
-            Sessions[userId] = session; // put it back
+            Sessions[userId] = session;
             return;
         }
         await DeferAsync(ephemeral: false).ConfigureAwait(false);
@@ -638,7 +667,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         await FollowupAsync("Builder canceled.", ephemeral: true).ConfigureAwait(false);
     }
 
-    // ─── Admin slash command ──────────────────────────────────────────────────
+    // ── Admin command ─────────────────────────────────────────────────────────
 
     [SlashCommand("pokebuild-setup", "Post the Pokémon builder panel in this channel (Admin only)")]
     public async Task PokeBuildSetupAsync()
@@ -663,25 +692,54 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         await FollowupAsync("✅ Builder panel posted!", ephemeral: true).ConfigureAwait(false);
     }
 
-    // ─── Embed & component builders ───────────────────────────────────────────
+    // ── Step router ───────────────────────────────────────────────────────────
 
-    private static Embed SpeciesPickerEmbed(PokemonBuilderState s)
+    private static Embed StepEmbed(PokemonBuilderState s) => s.Step switch
+    {
+        BuilderStep.Alpha   => AlphaEmbed(s),
+        BuilderStep.Shiny   => ShinyEmbed(s),
+        BuilderStep.Level   => LevelEmbed(s),
+        BuilderStep.Item    => ItemEmbed(s),
+        BuilderStep.Nature  => NatureEmbed(s),
+        BuilderStep.Ball    => BallEmbed(s),
+        BuilderStep.IV      => IVEmbed(s),
+        BuilderStep.EV      => EVEmbed(s),
+        BuilderStep.Confirm => ConfirmEmbed(s),
+        _                   => SpeciesEmbed(s),
+    };
+
+    private static MessageComponent StepComponents(PokemonBuilderState s, ulong userId) => s.Step switch
+    {
+        BuilderStep.Alpha   => AlphaComponents(s, userId),
+        BuilderStep.Shiny   => ShinyComponents(s, userId),
+        BuilderStep.Level   => LevelComponents(s, userId),
+        BuilderStep.Item    => ItemComponents(s, userId),
+        BuilderStep.Nature  => NatureComponents(s, userId),
+        BuilderStep.Ball    => BallComponents(s, userId),
+        BuilderStep.IV      => IVComponents(s, userId),
+        BuilderStep.EV      => EVComponents(s, userId),
+        BuilderStep.Confirm => ConfirmComponents(s, userId),
+        _                   => SpeciesComponents(s, userId),
+    };
+
+    // ── Species step ──────────────────────────────────────────────────────────
+
+    private static Embed SpeciesEmbed(PokemonBuilderState s)
     {
         var list  = BuilderData.GetSpecies(s.GameType);
         var total = BuilderData.TotalPages(list.Count);
-        var slice = BuilderData.GetPage(list, s.SpeciesPage).ToList();
         return new EmbedBuilder()
-            .WithTitle("🔨 Build a Pokémon — Choose a Species")
+            .WithTitle("🐾 Choose a Pokémon")
             .WithColor(Color.Blue)
             .WithDescription(
-                $"**{PokeBuildPanelManager.GetGameLabel()}** — {list.Count} available\n\n" +
-                $"Page **{s.SpeciesPage + 1} / {total}** · showing {slice.Count} Pokémon\n" +
+                $"**{Header(s)}**\n\n" +
+                $"{list.Count} Pokémon available · Page **{s.SpeciesPage + 1} / {total}**\n" +
                 "Pick from the dropdown, or use ◀ ▶ to browse alphabetically.")
             .WithFooter($"PokedexMasterBot {TradeBot.Version}")
             .Build();
     }
 
-    private static MessageComponent SpeciesPickerComponents(PokemonBuilderState s, ulong userId)
+    private static MessageComponent SpeciesComponents(PokemonBuilderState s, ulong userId)
     {
         var list  = BuilderData.GetSpecies(s.GameType);
         var total = BuilderData.TotalPages(list.Count);
@@ -702,118 +760,93 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             .Build();
     }
 
-    private static Embed BuilderEmbed(PokemonBuilderState s)
-    {
-        var moves = new[] { s.Move1, s.Move2, s.Move3, s.Move4 }
-            .Select((m, i) => string.IsNullOrWhiteSpace(m) ? null : $"{i + 1}. {m}")
-            .Where(m => m != null);
+    // ── Alpha step ────────────────────────────────────────────────────────────
 
-        var eb = new EmbedBuilder()
-            .WithTitle("🔨 Building Your Pokémon")
+    private static Embed AlphaEmbed(PokemonBuilderState s)
+        => new EmbedBuilder()
+            .WithTitle("⭐ Alpha Pokémon?")
+            .WithColor(Color.Orange)
+            .WithDescription(
+                $"**{Header(s)}**\n\n" +
+                $"**{s.SpeciesDisplay}** — Should this be an Alpha Pokémon?\n\n" +
+                "Alpha Pokémon are larger and have stronger moves.")
+            .WithFooter($"PokedexMasterBot {TradeBot.Version}")
+            .Build();
+
+    private static MessageComponent AlphaComponents(PokemonBuilderState s, ulong userId)
+        => new ComponentBuilder()
+            .WithButton("⭐ Yes, Alpha!",  $"pb_alpha_yes_{userId}", ButtonStyle.Success,   row: 0)
+            .WithButton("✖️ No",           $"pb_alpha_no_{userId}",  ButtonStyle.Secondary, row: 0)
+            .WithButton("◀ Back",          $"pb_back_{userId}",       ButtonStyle.Secondary, row: 1)
+            .Build();
+
+    // ── Shiny step ────────────────────────────────────────────────────────────
+
+    private static Embed ShinyEmbed(PokemonBuilderState s)
+    {
+        var extra = s.GameType is "la" or "plza"
+            ? $"Alpha: **{(s.Alpha ? "Yes ⭐" : "No")}**\n"
+            : "";
+        return new EmbedBuilder()
+            .WithTitle("✨ Shiny Pokémon?")
             .WithColor(Color.Gold)
             .WithDescription(
-                $"**{PokeBuildPanelManager.GetGameLabel()}** · " +
-                "Use the dropdowns & buttons below, then hit **✅ Submit**!")
-            .AddField("🐾 Pokémon",
-                string.IsNullOrWhiteSpace(s.SpeciesDisplay) ? "*Not chosen*" : s.SpeciesDisplay, inline: true)
-            .AddField("📊 Level", $"Lv. {s.Level}", inline: true)
-            .AddField("✨ Shiny", s.Shiny ? "Yes ⭐" : "No", inline: true)
-            .AddField("🌿 Nature",
-                string.IsNullOrWhiteSpace(s.Nature) ? "*Random*" : s.Nature, inline: true)
-            .AddField("⚾ Ball",
-                string.IsNullOrWhiteSpace(s.Ball) ? "*Default*" : s.Ball, inline: true)
-            .AddField("💎 Item",
-                string.IsNullOrWhiteSpace(s.Item) ? "*None*" : s.Item, inline: true);
-
-        if (s.GameType == "sv")
-            eb.AddField("🧬 Tera",
-                string.IsNullOrWhiteSpace(s.TeraType) ? "*Default*" : s.TeraType, inline: true);
-        else if (s.GameType is "la" or "plza")
-            eb.AddField("⭐ Alpha", s.Alpha ? "Yes" : "No", inline: true);
-
-        var moveText = string.Join("\n", moves);
-        eb.AddField("⚔️ Moves",
-            string.IsNullOrWhiteSpace(moveText) ? "*None set — click Moves*" : moveText);
-
-        eb.WithFooter($"PokedexMasterBot {TradeBot.Version} · IVs: 31 all by default");
-        return eb.Build();
+                $"**{Header(s)}**\n\n" +
+                $"**{s.SpeciesDisplay}**\n{extra}\n" +
+                "Should this Pokémon be Shiny?")
+            .WithFooter($"PokedexMasterBot {TradeBot.Version}")
+            .Build();
     }
 
-    private static MessageComponent BuilderComponents(PokemonBuilderState s, ulong userId)
-    {
-        var cb = new ComponentBuilder();
+    private static MessageComponent ShinyComponents(PokemonBuilderState s, ulong userId)
+        => new ComponentBuilder()
+            .WithButton("✨ Yes, Shiny!",  $"pb_shiny_yes_{userId}", ButtonStyle.Success,   row: 0)
+            .WithButton("✖️ No",           $"pb_shiny_no_{userId}",  ButtonStyle.Secondary, row: 0)
+            .WithButton("◀ Back",          $"pb_back_{userId}",       ButtonStyle.Secondary, row: 1)
+            .Build();
 
-        // Row 0 — Level (filtered to legal range for this species)
-        var (sp, spForm) = ParseSpeciesForm(s.Species);
-        var legalLevels  = sp > 0
-            ? BuilderData.GetLegalLevels(s.GameType, sp, spForm)
-            : (IReadOnlyList<int>)Enumerable.Range(1, 100)
-                .Where(l => l == 1 || l % 5 == 0).ToList();
+    // ── Level step ────────────────────────────────────────────────────────────
+
+    private static Embed LevelEmbed(PokemonBuilderState s)
+    {
+        var (sp, form) = ParseSpeciesForm(s.Species);
+        var legal = sp > 0 ? BuilderData.GetLegalLevels(s.GameType, sp, form) : null;
+        var rangeText = legal is { Count: > 0 }
+            ? $"Legal levels for **{s.SpeciesDisplay}**: {legal[0]}–100"
+            : "Choose any level";
+        return new EmbedBuilder()
+            .WithTitle("📊 Choose a Level")
+            .WithColor(Color.Green)
+            .WithDescription(
+                $"**{Header(s)}**\n\n" +
+                $"{rangeText}\n\n" +
+                "Pick from the dropdown below.")
+            .WithFooter($"PokedexMasterBot {TradeBot.Version}")
+            .Build();
+    }
+
+    private static MessageComponent LevelComponents(PokemonBuilderState s, ulong userId)
+    {
+        var (sp, form) = ParseSpeciesForm(s.Species);
+        var legalLevels = sp > 0
+            ? BuilderData.GetLegalLevels(s.GameType, sp, form)
+            : (IReadOnlyList<int>)Enumerable.Range(1, 100).Where(l => l == 1 || l % 5 == 0).ToList();
 
         var levelMenu = new SelectMenuBuilder()
             .WithCustomId($"pb_level_{userId}")
             .WithPlaceholder($"📊 Level — currently {s.Level}");
         foreach (var lvl in legalLevels)
             levelMenu.AddOption($"Level {lvl}", lvl.ToString(), isDefault: s.Level == lvl);
-        cb.WithSelectMenu(levelMenu, row: 0);
 
-        // Row 1 — Nature
-        var natureMenu = new SelectMenuBuilder()
-            .WithCustomId($"pb_nature_{userId}")
-            .WithPlaceholder("🌿 Nature — pick one...");
-        foreach (var (name, effect) in PokeBuildPanelManager.Natures)
-            natureMenu.AddOption(name, name, effect,
-                isDefault: name.Equals(s.Nature, StringComparison.OrdinalIgnoreCase));
-        cb.WithSelectMenu(natureMenu, row: 1);
-
-        // Row 2 — Ball
-        var ballMenu = new SelectMenuBuilder()
-            .WithCustomId($"pb_ball_{userId}")
-            .WithPlaceholder("⚾ Poké Ball — pick one...");
-        foreach (var ball in PokeBuildPanelManager.GetBalls())
-            ballMenu.AddOption(ball, ball,
-                isDefault: ball.Equals(s.Ball, StringComparison.OrdinalIgnoreCase));
-        cb.WithSelectMenu(ballMenu, row: 2);
-
-        if (s.GameType == "sv")
-        {
-            // Row 3 — Tera Type
-            var teraMenu = new SelectMenuBuilder()
-                .WithCustomId($"pb_tera_{userId}")
-                .WithPlaceholder("🧬 Tera Type — pick one...");
-            foreach (var t in TeraTypes)
-                teraMenu.AddOption(t, t,
-                    isDefault: t.Equals(s.TeraType, StringComparison.OrdinalIgnoreCase));
-            cb.WithSelectMenu(teraMenu, row: 3);
-
-            // Row 4 — buttons
-            cb.WithButton(s.Shiny ? "✨ Shiny: ON" : "✨ Shiny: OFF",
-                $"pb_shiny_{userId}", s.Shiny ? ButtonStyle.Success : ButtonStyle.Secondary, row: 4);
-            cb.WithButton("🎒 Item",  $"pb_item_{userId}",  ButtonStyle.Primary,   row: 4);
-            cb.WithButton("⚔️ Moves", $"pb_moves_{userId}", ButtonStyle.Primary,   row: 4);
-            cb.WithButton("✅ Submit", $"pb_submit_{userId}", ButtonStyle.Success,  row: 4);
-            cb.WithButton("❌ Cancel", $"pb_cancel_{userId}", ButtonStyle.Danger,   row: 4);
-        }
-        else
-        {
-            // Row 3 — action buttons
-            cb.WithButton(s.Shiny ? "✨ Shiny: ON" : "✨ Shiny: OFF",
-                $"pb_shiny_{userId}", s.Shiny ? ButtonStyle.Success : ButtonStyle.Secondary, row: 3);
-            if (s.GameType is "la" or "plza")
-                cb.WithButton(s.Alpha ? "⭐ Alpha: ON" : "⭐ Alpha: OFF",
-                    $"pb_alpha_{userId}", s.Alpha ? ButtonStyle.Success : ButtonStyle.Secondary, row: 3);
-            cb.WithButton("🎒 Item",  $"pb_item_{userId}",  ButtonStyle.Primary, row: 3);
-            cb.WithButton("⚔️ Moves", $"pb_moves_{userId}", ButtonStyle.Primary, row: 3);
-
-            // Row 4 — submit / cancel
-            cb.WithButton("✅ Submit Trade", $"pb_submit_{userId}", ButtonStyle.Success, row: 4);
-            cb.WithButton("❌ Cancel",       $"pb_cancel_{userId}", ButtonStyle.Danger,  row: 4);
-        }
-
-        return cb.Build();
+        return new ComponentBuilder()
+            .WithSelectMenu(levelMenu, row: 0)
+            .WithButton("◀ Back", $"pb_back_{userId}", ButtonStyle.Secondary, row: 1)
+            .Build();
     }
 
-    private static Embed ItemPickerEmbed(PokemonBuilderState s)
+    // ── Item step ─────────────────────────────────────────────────────────────
+
+    private static Embed ItemEmbed(PokemonBuilderState s)
     {
         var items = BuilderData.GetItems(s.GameType);
         var total = BuilderData.TotalPages(items.Count);
@@ -821,14 +854,14 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             .WithTitle("🎒 Choose a Held Item")
             .WithColor(Color.DarkGreen)
             .WithDescription(
-                $"Currently: **{(string.IsNullOrWhiteSpace(s.Item) ? "None" : s.Item)}**\n" +
+                $"**{Header(s)}**\n\n" +
                 $"Page **{s.ItemPage + 1} / {total}** · {items.Count} items available\n" +
-                "Pick from the list, or ◀ ▶ to browse.")
+                "Pick from the list, or press **🚫 No Item** to skip.")
             .WithFooter($"PokedexMasterBot {TradeBot.Version}")
             .Build();
     }
 
-    private static MessageComponent ItemPickerComponents(PokemonBuilderState s, ulong userId)
+    private static MessageComponent ItemComponents(PokemonBuilderState s, ulong userId)
     {
         var items = BuilderData.GetItems(s.GameType);
         var total = BuilderData.TotalPages(items.Count);
@@ -847,88 +880,163 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             .WithButton("◀", $"pb_iprev_{userId}", ButtonStyle.Secondary, disabled: page == 0, row: 1)
             .WithButton($"{page + 1} / {total}", "pb_item_label", ButtonStyle.Secondary, disabled: true, row: 1)
             .WithButton("▶", $"pb_inext_{userId}", ButtonStyle.Secondary, disabled: page >= total - 1, row: 1)
-            .WithButton("🚫 No Item",          $"pb_iclear_{userId}", ButtonStyle.Danger,     row: 2)
-            .WithButton("🔙 Back to Builder",  $"pb_iback_{userId}",  ButtonStyle.Secondary,  row: 2)
+            .WithButton("🚫 No Item", $"pb_iclear_{userId}", ButtonStyle.Danger,     row: 2)
+            .WithButton("◀ Back",     $"pb_back_{userId}",   ButtonStyle.Secondary,  row: 2)
             .Build();
     }
 
-    private static Embed MovePickerEmbed(PokemonBuilderState s, IReadOnlyList<string> moves)
-    {
-        var total = BuilderData.TotalPages(moves.Count);
-        var set   = new[] { s.Move1, s.Move2, s.Move3, s.Move4 }
-            .Select((m, i) => string.IsNullOrWhiteSpace(m) ? $"Move {i + 1}: *empty*" : $"Move {i + 1}: {m}");
-        return new EmbedBuilder()
-            .WithTitle($"⚔️ Pick Move {s.MoveStep + 1} of 4")
-            .WithColor(Color.Red)
+    // ── Nature step ───────────────────────────────────────────────────────────
+
+    private static Embed NatureEmbed(PokemonBuilderState s)
+        => new EmbedBuilder()
+            .WithTitle("🌿 Choose a Nature")
+            .WithColor(Color.Teal)
             .WithDescription(
-                string.Join("\n", set) + "\n\n" +
-                $"Page **{s.MovePage + 1} / {total}** · {moves.Count} legal moves for {s.SpeciesDisplay}\n" +
-                "Pick from the list, browse with ◀ ▶, or skip this slot.")
+                $"**{Header(s)}**\n\n" +
+                "Nature affects which two stats grow faster or slower.\n" +
+                "Pick from the dropdown below.")
             .WithFooter($"PokedexMasterBot {TradeBot.Version}")
             .Build();
+
+    private static MessageComponent NatureComponents(PokemonBuilderState s, ulong userId)
+    {
+        var natureMenu = new SelectMenuBuilder()
+            .WithCustomId($"pb_nature_{userId}")
+            .WithPlaceholder("🌿 Nature — pick one...");
+        foreach (var (name, effect) in PokeBuildPanelManager.Natures)
+            natureMenu.AddOption(name, name, effect,
+                isDefault: name.Equals(s.Nature, StringComparison.OrdinalIgnoreCase));
+
+        return new ComponentBuilder()
+            .WithSelectMenu(natureMenu, row: 0)
+            .WithButton("◀ Back", $"pb_back_{userId}", ButtonStyle.Secondary, row: 1)
+            .Build();
     }
 
-    private static MessageComponent MovePickerComponents(PokemonBuilderState s, ulong userId, IReadOnlyList<string> moves)
-    {
-        var total = BuilderData.TotalPages(moves.Count);
-        var page  = s.MovePage;
-        var slice = BuilderData.GetPage(moves, page).ToList();
+    // ── Ball step ─────────────────────────────────────────────────────────────
 
+    private static Embed BallEmbed(PokemonBuilderState s)
+        => new EmbedBuilder()
+            .WithTitle("⚾ Choose a Poké Ball")
+            .WithColor(Color.Red)
+            .WithDescription(
+                $"**{Header(s)}**\n\n" +
+                "Pick the ball this Pokémon was caught in.")
+            .WithFooter($"PokedexMasterBot {TradeBot.Version}")
+            .Build();
+
+    private static MessageComponent BallComponents(PokemonBuilderState s, ulong userId)
+    {
+        var ballMenu = new SelectMenuBuilder()
+            .WithCustomId($"pb_ball_{userId}")
+            .WithPlaceholder("⚾ Poké Ball — pick one...");
+        foreach (var ball in PokeBuildPanelManager.GetBalls())
+            ballMenu.AddOption(ball, ball,
+                isDefault: ball.Equals(s.Ball, StringComparison.OrdinalIgnoreCase));
+
+        return new ComponentBuilder()
+            .WithSelectMenu(ballMenu, row: 0)
+            .WithButton("◀ Back", $"pb_back_{userId}", ButtonStyle.Secondary, row: 1)
+            .Build();
+    }
+
+    // ── IV step ───────────────────────────────────────────────────────────────
+
+    private static Embed IVEmbed(PokemonBuilderState s)
+        => new EmbedBuilder()
+            .WithTitle("🏆 Choose an IV Spread")
+            .WithColor(Color.Purple)
+            .WithDescription(
+                $"**{Header(s)}**\n\n" +
+                "IVs determine how high each stat can go.\n" +
+                "Pick a preset below.")
+            .WithFooter($"PokedexMasterBot {TradeBot.Version}")
+            .Build();
+
+    private static MessageComponent IVComponents(PokemonBuilderState s, ulong userId)
+    {
         var menu = new SelectMenuBuilder()
-            .WithCustomId($"pb_msel_{userId}")
-            .WithPlaceholder($"⚔️ Move {s.MoveStep + 1} for {s.SpeciesDisplay}...");
-        foreach (var move in slice)
-            menu.AddOption(move, move);
+            .WithCustomId($"pb_iv_{userId}")
+            .WithPlaceholder("🏆 IV Spread...");
+        foreach (var (label, desc, value) in IVPresets)
+            menu.AddOption(label, value, desc, isDefault: value == s.IVs);
 
         return new ComponentBuilder()
             .WithSelectMenu(menu, row: 0)
-            .WithButton("◀", $"pb_mprev_{userId}", ButtonStyle.Secondary, disabled: page == 0, row: 1)
-            .WithButton($"{page + 1} / {total}", "pb_move_label", ButtonStyle.Secondary, disabled: true, row: 1)
-            .WithButton("▶", $"pb_mnext_{userId}", ButtonStyle.Secondary, disabled: page >= total - 1, row: 1)
-            .WithButton($"⏭ Skip Move {s.MoveStep + 1}", $"pb_mskip_{userId}", ButtonStyle.Secondary, row: 2)
-            .WithButton("🔙 Back to Builder",             $"pb_mback_{userId}", ButtonStyle.Secondary, row: 2)
+            .WithButton("◀ Back", $"pb_back_{userId}", ButtonStyle.Secondary, row: 1)
             .Build();
     }
 
-    // ─── Central message updater ──────────────────────────────────────────────
+    // ── EV step ───────────────────────────────────────────────────────────────
 
-    private async Task UpdateAsync(PokemonBuilderState session, ulong userId, PickerMode mode)
+    private static Embed EVEmbed(PokemonBuilderState s)
+        => new EmbedBuilder()
+            .WithTitle("💪 Choose an EV Spread")
+            .WithColor(Color.DarkPurple)
+            .WithDescription(
+                $"**{Header(s)}**\n\n" +
+                "EVs give bonus stats. Pick a common competitive spread.")
+            .WithFooter($"PokedexMasterBot {TradeBot.Version}")
+            .Build();
+
+    private static MessageComponent EVComponents(PokemonBuilderState s, ulong userId)
     {
-        if (session.MessageId == 0) return;
-
-        Embed embed;
-        MessageComponent components;
-
-        switch (mode)
+        var menu = new SelectMenuBuilder()
+            .WithCustomId($"pb_ev_{userId}")
+            .WithPlaceholder("💪 EV Spread...");
+        foreach (var (label, desc, value) in EVPresets)
         {
-            case PickerMode.Species:
-                embed      = SpeciesPickerEmbed(session);
-                components = SpeciesPickerComponents(session, userId);
-                break;
-            case PickerMode.Item:
-                embed      = ItemPickerEmbed(session);
-                components = ItemPickerComponents(session, userId);
-                break;
-            case PickerMode.Move:
-                var movesForPick = GetSessionMoves(session);
-                embed      = MovePickerEmbed(session, movesForPick);
-                components = MovePickerComponents(session, userId, movesForPick);
-                break;
-            default:
-                // Builder — but if species not yet set, fall back to species picker
-                if (string.IsNullOrWhiteSpace(session.Species))
-                {
-                    embed      = SpeciesPickerEmbed(session);
-                    components = SpeciesPickerComponents(session, userId);
-                }
-                else
-                {
-                    embed      = BuilderEmbed(session);
-                    components = BuilderComponents(session, userId);
-                }
-                break;
+            var optValue = value.Length == 0 ? "_none_" : value;
+            var isDefault = value.Length == 0
+                ? string.IsNullOrEmpty(s.EVs)
+                : value == s.EVs;
+            menu.AddOption(label, optValue, desc, isDefault: isDefault);
         }
 
+        return new ComponentBuilder()
+            .WithSelectMenu(menu, row: 0)
+            .WithButton("◀ Back", $"pb_back_{userId}", ButtonStyle.Secondary, row: 1)
+            .Build();
+    }
+
+    // ── Confirm step ──────────────────────────────────────────────────────────
+
+    private static Embed ConfirmEmbed(PokemonBuilderState s)
+    {
+        var eb = new EmbedBuilder()
+            .WithTitle("✅ Confirm Your Pokémon")
+            .WithColor(Color.Green)
+            .WithDescription(
+                $"**{Header(s)}**\n\n" +
+                "Review your choices, then hit **✅ Request Trade**!")
+            .AddField("🐾 Pokémon",  s.SpeciesDisplay,                             inline: true)
+            .AddField("📊 Level",    $"Lv. {s.Level}",                             inline: true)
+            .AddField("✨ Shiny",    s.Shiny ? "Yes ⭐" : "No",                    inline: true)
+            .AddField("🌿 Nature",   string.IsNullOrWhiteSpace(s.Nature) ? "*Random*"  : s.Nature, inline: true)
+            .AddField("⚾ Ball",     string.IsNullOrWhiteSpace(s.Ball)   ? "*Default*" : s.Ball,   inline: true)
+            .AddField("💎 Item",     string.IsNullOrWhiteSpace(s.Item)   ? "*None*"    : s.Item,   inline: true)
+            .AddField("🏆 IVs",     FormatIVs(s.IVs),                             inline: true)
+            .AddField("💪 EVs",     FormatEVs(s.EVs),                             inline: true);
+
+        if (s.GameType is "la" or "plza")
+            eb.AddField("⭐ Alpha", s.Alpha ? "Yes" : "No", inline: true);
+
+        eb.WithFooter($"PokedexMasterBot {TradeBot.Version}");
+        return eb.Build();
+    }
+
+    private static MessageComponent ConfirmComponents(PokemonBuilderState s, ulong userId)
+        => new ComponentBuilder()
+            .WithButton("✅ Request Trade", $"pb_submit_{userId}", ButtonStyle.Success,   row: 0)
+            .WithButton("◀ Back",           $"pb_back_{userId}",   ButtonStyle.Secondary, row: 0)
+            .WithButton("❌ Cancel",         $"pb_cancel_{userId}", ButtonStyle.Danger,    row: 0)
+            .Build();
+
+    // ── Update / Delete ───────────────────────────────────────────────────────
+
+    private async Task UpdateAsync(PokemonBuilderState session, ulong userId)
+    {
+        if (session.MessageId == 0) return;
         try
         {
             if (await Context.Channel.GetMessageAsync(session.MessageId).ConfigureAwait(false)
@@ -936,8 +1044,8 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             {
                 await msg.ModifyAsync(m =>
                 {
-                    m.Embed      = embed;
-                    m.Components = components;
+                    m.Embed      = StepEmbed(session);
+                    m.Components = StepComponents(session, userId);
                 }).ConfigureAwait(false);
             }
         }
@@ -956,43 +1064,42 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         catch { }
     }
 
-    // ─── Submit dispatch ──────────────────────────────────────────────────────
+    // ── Dispatch ──────────────────────────────────────────────────────────────
 
     private async Task DispatchAsync(PokemonBuilderState s)
     {
         var item   = string.IsNullOrWhiteSpace(s.Item)   ? null : s.Item;
         var ball   = string.IsNullOrWhiteSpace(s.Ball)   ? null : s.Ball;
         var nature = string.IsNullOrWhiteSpace(s.Nature) ? null : s.Nature;
-        bool hasMoves = !string.IsNullOrWhiteSpace(s.Move1) || !string.IsNullOrWhiteSpace(s.Move2)
-                     || !string.IsNullOrWhiteSpace(s.Move3) || !string.IsNullOrWhiteSpace(s.Move4);
-        Action<T>? Moves<T>() where T : PKM, new() => hasMoves ? MovePostProcess<T>(s) : null;
+        var evs    = string.IsNullOrWhiteSpace(s.EVs)    ? null : s.EVs;
 
         switch (s.GameType)
         {
             case "sv":
                 await CreatePokemonHelper.ExecuteCreatePokemonAsync<PK9>(Context, s.Species,
-                    s.Shiny, item, ball, s.Level, nature, null, null,
-                    string.IsNullOrWhiteSpace(s.TeraType) ? "" : $"Tera Type: {s.TeraType}",
-                    Moves<PK9>()).ConfigureAwait(false);
+                    s.Shiny, item, ball, s.Level, nature, s.IVs, evs, "", null)
+                    .ConfigureAwait(false);
                 break;
             case "la":
                 await CreatePokemonHelper.ExecuteCreatePokemonAsync<PA8>(Context, s.Species,
-                    s.Shiny, null, ball, s.Level, nature, null, null,
-                    s.Alpha ? "Alpha: Yes" : "", Moves<PA8>()).ConfigureAwait(false);
+                    s.Shiny, null, ball, s.Level, nature, s.IVs, evs,
+                    s.Alpha ? "Alpha: Yes" : "", null)
+                    .ConfigureAwait(false);
                 break;
             case "plza":
                 await CreatePokemonHelper.ExecuteCreatePokemonAsync<PA9>(Context, s.Species,
-                    s.Shiny, item, ball, s.Level, nature, null, null,
-                    s.Alpha ? "Alpha: Yes" : "", Moves<PA9>()).ConfigureAwait(false);
+                    s.Shiny, item, ball, s.Level, nature, s.IVs, evs,
+                    s.Alpha ? "Alpha: Yes" : "", null)
+                    .ConfigureAwait(false);
                 break;
             case "swsh":
                 await CreatePokemonHelper.ExecuteCreatePokemonAsync<PK8>(Context, s.Species,
-                    s.Shiny, item, ball, s.Level, nature, null, null, "", Moves<PK8>())
+                    s.Shiny, item, ball, s.Level, nature, s.IVs, evs, "", null)
                     .ConfigureAwait(false);
                 break;
             case "bdsp":
                 await CreatePokemonHelper.ExecuteCreatePokemonAsync<PB8>(Context, s.Species,
-                    s.Shiny, item, ball, s.Level, nature, null, null, "", Moves<PB8>())
+                    s.Shiny, item, ball, s.Level, nature, s.IVs, evs, "", null)
                     .ConfigureAwait(false);
                 break;
             default:
@@ -1001,41 +1108,8 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         }
     }
 
-    private static Action<T> MovePostProcess<T>(PokemonBuilderState s) where T : PKM, new()
-    {
-        return pk =>
-        {
-            var names = GameInfo.GetStrings("en").movelist;
-            var ids   = new[] { s.Move1, s.Move2, s.Move3, s.Move4 }
-                .Select(m => FindMoveId(names, m)).ToArray();
-            if (ids[0] > 0) pk.Move1 = ids[0];
-            if (ids[1] > 0) pk.Move2 = ids[1];
-            if (ids[2] > 0) pk.Move3 = ids[2];
-            if (ids[3] > 0) pk.Move4 = ids[3];
-            pk.HealPP();
-        };
-    }
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static ushort FindMoveId(string[] names, string moveName)
-    {
-        if (string.IsNullOrWhiteSpace(moveName)) return 0;
-        var idx = Array.FindIndex(names, 1,
-            n => n.Equals(moveName.Trim(), StringComparison.OrdinalIgnoreCase));
-        return idx > 0 ? (ushort)idx : (ushort)0;
-    }
-
-    private static void SetMove(PokemonBuilderState s, int step, string value)
-    {
-        switch (step)
-        {
-            case 0: s.Move1 = value; break;
-            case 1: s.Move2 = value; break;
-            case 2: s.Move3 = value; break;
-            case 3: s.Move4 = value; break;
-        }
-    }
-
-    // Parses "EnumName|form|DisplayName" stored in session.Species
     private static (ushort Species, byte Form) ParseSpeciesForm(string value)
     {
         var parts = value.Split('|');
@@ -1048,14 +1122,25 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         return (0, 0);
     }
 
-    // Returns the move list for the species already chosen in the session,
-    // falling back to all moves if none chosen yet.
-    private static IReadOnlyList<string> GetSessionMoves(PokemonBuilderState s)
+    private static string FormatIVs(string ivs)
     {
-        if (string.IsNullOrWhiteSpace(s.Species)) return BuilderData.GetMoves();
-        var (sp, form) = ParseSpeciesForm(s.Species);
-        return sp > 0
-            ? BuilderData.GetMovesForSpecies(s.GameType, sp, form)
-            : BuilderData.GetMoves();
+        if (string.IsNullOrWhiteSpace(ivs)) return "31 all (Perfect)";
+        var parts = ivs.Split('/');
+        if (parts.Length != 6) return ivs;
+        string[] stats = ["HP", "Atk", "Def", "SpA", "SpD", "Spe"];
+        return string.Join(" / ", parts.Zip(stats, (v, s) => $"{v.Trim()} {s}"));
+    }
+
+    private static string FormatEVs(string evs)
+    {
+        if (string.IsNullOrWhiteSpace(evs) || evs == "_none_") return "None";
+        var parts = evs.Split('/');
+        if (parts.Length != 6) return evs;
+        string[] stats = ["HP", "Atk", "Def", "SpA", "SpD", "Spe"];
+        var nonZero = parts.Zip(stats, (v, s) => (v.Trim(), s))
+            .Where(x => x.Item1 is not "0" and not "")
+            .Select(x => $"{x.Item1} {x.s}");
+        var joined = string.Join(" / ", nonZero);
+        return string.IsNullOrEmpty(joined) ? "None" : joined;
     }
 }
