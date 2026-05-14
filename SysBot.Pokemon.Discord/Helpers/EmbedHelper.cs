@@ -234,7 +234,7 @@ public static class EmbedHelper
             if (!isMysteryEgg && pk.Species != 0)
             {
                 var shinyTag = pk.IsShiny ? " ✨" : "";
-                embedBuilder.AddField("Pokémon Received", $"**{speciesName}{shinyTag}** — Level {pk.Level}", true);
+                embedBuilder.AddField("Pokémon Received", $"**{speciesName}{shinyTag}** — Level {pk.CurrentLevel}", true);
 
                 if (!string.IsNullOrEmpty(pk.Nickname) && pk.Nickname != speciesName)
                     embedBuilder.AddField("Nickname", pk.Nickname, true);
