@@ -403,24 +403,6 @@ namespace SysBot.Pokemon.WinForms
             ResumeLayout(false);
         }
 
-        private void panelTitleBar_Paint(object sender, PaintEventArgs e)
-{
-    // Draw the existing image first
-    if (panelTitleBar.BackgroundImage != null)
-        e.Graphics.DrawImage(panelTitleBar.BackgroundImage, 0, 0, panelTitleBar.Width, panelTitleBar.Height);
-
-    // Draw sparkles
-    foreach (var sp in sparkles)
-    {
-        int alpha = (int)(255 * (float)sp.Life / sp.MaxLife);
-        using (Brush brush = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
-        {
-            e.Graphics.FillEllipse(brush, sp.Position.X, sp.Position.Y, sp.Size, sp.Size);
-        }
-    }
-}
-
-
         #endregion
 
         internal Panel panelLeftSide;
