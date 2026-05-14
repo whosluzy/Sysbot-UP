@@ -493,9 +493,29 @@ public sealed partial class SysCord<T> : IDisposable where T : PKM, new()
     {
         try
         {
-            // Register slash commands globally (available in all servers)
-            await _interactions.RegisterCommandsGloballyAsync().ConfigureAwait(false);
-            await Log(new LogMessage(LogSeverity.Info, "Interactions", "Slash commands registered globally!")).ConfigureAwait(false);
+            // Register to every guild the bot is in — updates instantly (no propagation delay)
+            var guilds = _client.Guilds;
+            if (guilds.Count > 0)
+            {
+                foreach (var guild in guilds)
+                {
+                    try
+                    {
+                        await _interactions.RegisterCommandsToGuildAsync(guild.Id).ConfigureAwait(false);
+                        await Log(new LogMessage(LogSeverity.Info, "Interactions", $"Slash commands registered to guild: {guild.Name}")).ConfigureAwait(false);
+                    }
+                    catch (Exception guildEx)
+                    {
+                        await Log(new LogMessage(LogSeverity.Warning, "Interactions", $"Failed to register commands to guild {guild.Name}: {guildEx.Message}")).ConfigureAwait(false);
+                    }
+                }
+            }
+            else
+            {
+                // Fallback to global if no guilds are cached yet
+                await _interactions.RegisterCommandsGloballyAsync().ConfigureAwait(false);
+                await Log(new LogMessage(LogSeverity.Info, "Interactions", "Slash commands registered globally (no guilds cached).")).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {
