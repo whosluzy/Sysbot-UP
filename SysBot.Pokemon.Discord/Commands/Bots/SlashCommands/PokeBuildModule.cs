@@ -37,6 +37,8 @@ internal static class BuilderData
     public static IReadOnlyList<int> GetLegalLevels(string gameType, ushort species, byte form)
         => LevelCache.GetOrAdd((gameType, species, form), k => BuildLegalLevels(k.Game, k.Species, k.Form));
 
+    public static void ClearLevelCache() => LevelCache.Clear();
+
     public static int TotalPages(int count) => Math.Max(1, (int)Math.Ceiling(count / (double)PageSize));
 
     public static IEnumerable<T> GetPage<T>(IReadOnlyList<T> list, int page)
@@ -118,18 +120,41 @@ internal static class BuilderData
             .ToList();
     }
 
-    // ── Legal Levels (per species) ────────────────────────────────────────────
+    // ── Legal Levels (per species, from actual encounter data) ───────────────
 
     private static IReadOnlyList<int> BuildLegalLevels(string gameType, ushort species, byte form)
     {
-        var min = GetMinLevel(gameType, species, form);
-        return Enumerable.Range(min, 101 - min)
-            .Where(l => l == min || l % 5 == 0)
-            .ToList();
-    }
+        var levels = new SortedSet<int>();
+        var instFlags = BindingFlags.Public | BindingFlags.Instance;
 
-    private static int GetMinLevel(string gameType, ushort species, byte form)
-    {
+        foreach (var area in GetEncounterAreas(gameType))
+        {
+            if (area.GetType().GetProperty("Slots", instFlags)?.GetValue(area)
+                is not IEnumerable slots) continue;
+
+            foreach (var slot in slots)
+            {
+                var t = slot.GetType();
+                var rawSp = t.GetProperty("Species", instFlags)?.GetValue(slot);
+                var slotSp = rawSp switch { ushort u => u, int i => (ushort)i, _ => (ushort)0 };
+                if (slotSp != species) continue;
+
+                var rawForm = t.GetProperty("Form", instFlags)?.GetValue(slot);
+                var slotForm = rawForm switch { byte b => b, int i => (byte)i, _ => (byte)0 };
+                if (slotForm != 0 && slotForm != form) continue;
+
+                var rawMin = t.GetProperty("LevelMin", instFlags)?.GetValue(slot);
+                var rawMax = t.GetProperty("LevelMax", instFlags)?.GetValue(slot);
+                int lmin = rawMin switch { byte b => b, int i => i, _ => 0 };
+                int lmax = rawMax switch { byte b => b, int i => i, _ => lmin };
+                for (int l = lmin; l <= lmax; l++) levels.Add(l);
+            }
+        }
+
+        if (levels.Count > 0)
+            return CompressLevels(levels);
+
+        // No wild encounters — check if the species can breed (can hatch at Lv 1)
         IPersonalTable table = gameType switch
         {
             "la"   => PersonalTable.LA,
@@ -138,50 +163,38 @@ internal static class BuilderData
             "bdsp" => PersonalTable.BDSP,
             _      => PersonalTable.SV,
         };
-        var info = table[species];
-        // EggGroup1 = 15 → Undiscovered (can't breed, can't hatch at level 1)
-        var eg1Prop = info.GetType().GetProperty("EggGroup1",
-            BindingFlags.Public | BindingFlags.Instance);
-        if (eg1Prop?.GetValue(info) is int eg1 && eg1 != 15)
-            return 1;
-
-        return GetMinEncounterLevel(gameType, species, form);
+        var info   = table[species];
+        var eg1Prop = info.GetType().GetProperty("EggGroup1", BindingFlags.Public | BindingFlags.Instance);
+        var eg1Val  = eg1Prop?.GetValue(info);
+        int eg1     = eg1Val switch { int i => i, byte b => b, _ => 15 };
+        int minFall = eg1 != 15 ? 1 : 50;   // breedable → level 1; legend/mythic → level 50
+        return Enumerable.Range(minFall, 101 - minFall)
+            .Where(l => l == minFall || l % 5 == 0)
+            .ToList();
     }
 
-    private static int GetMinEncounterLevel(string gameType, ushort species, byte form)
+    // Compresses a large set of encounter levels to ≤24 dropdown options.
+    private static IReadOnlyList<int> CompressLevels(SortedSet<int> levels)
     {
-        var areas     = GetEncounterAreas(gameType);
-        var instFlags = BindingFlags.Public | BindingFlags.Instance;
-        int minLevel  = int.MaxValue;
-
-        foreach (var area in areas)
+        if (levels.Count <= 24) return [.. levels];
+        var result = new SortedSet<int> { levels.Min, levels.Max };
+        // Fill with multiples-of-5 that fall inside the encounter range
+        for (int l = ((levels.Min / 5) + 1) * 5; l < levels.Max; l += 5)
+            result.Add(l);
+        // Still too many? Widen step to 10
+        if (result.Count > 24)
         {
-            if (area.GetType().GetProperty("Slots", instFlags)?.GetValue(area)
-                is not IEnumerable slots)
-                continue;
-
-            foreach (var slot in slots)
-            {
-                var t = slot.GetType();
-                var rawSp   = t.GetProperty("Species", instFlags)?.GetValue(slot);
-                var slotSp  = rawSp  switch { ushort u => u, int i => (ushort)i, _ => (ushort)0 };
-                if (slotSp != species) continue;
-
-                var rawForm   = t.GetProperty("Form", instFlags)?.GetValue(slot);
-                var slotForm  = rawForm switch { byte b => b, int i => (byte)i, _ => (byte)0 };
-                if (slotForm != 0 && slotForm != form) continue;
-
-                var rawMin = t.GetProperty("LevelMin", instFlags)?.GetValue(slot);
-                var lmin   = rawMin switch { byte b => (int)b, int i => i, _ => 1 };
-                if (lmin < minLevel) minLevel = lmin;
-            }
+            result.Clear();
+            result.Add(levels.Min);
+            result.Add(levels.Max);
+            for (int l = ((levels.Min / 10) + 1) * 10; l < levels.Max; l += 10)
+                result.Add(l);
         }
-
-        return minLevel == int.MaxValue ? 1 : minLevel;
+        return [.. result];
     }
 
-    // Scans the entire PKHeX assembly for static EncounterArea* array fields.
-    // Cached per game type so the reflection only runs once per game.
+    // Directly accesses the known PKHeX encounter-area static fields by name.
+    // Avoids assembly.GetTypes() which can throw ReflectionTypeLoadException.
     private static IReadOnlyList<object> GetEncounterAreas(string gameType)
         => EncounterAreasCache.GetOrAdd(gameType, LoadEncounterAreas);
 
@@ -189,42 +202,33 @@ internal static class BuilderData
     {
         try
         {
-            var assembly      = typeof(PersonalTable).Assembly;
-            var areaTypeName  = gameType switch
+            var asm  = typeof(PersonalTable).Assembly;
+            var bind = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            var all  = new List<object>();
+
+            // (className, field names) — discovered via reflection probe on PKHeX 24.6.3
+            (string cls, string[] fields)[] targets = gameType switch
             {
-                "la"   => "PKHeX.Core.EncounterArea8a",
-                "swsh" => "PKHeX.Core.EncounterArea8",
-                "bdsp" => "PKHeX.Core.EncounterArea8b",
-                _      => "PKHeX.Core.EncounterArea9",
+                "la"   => [("PKHeX.Core.Encounters8a", ["SlotsLA"])],
+                "swsh" => [("PKHeX.Core.Encounters8",  ["SlotsSW_Symbol", "SlotsSH_Symbol",
+                                                         "SlotsSW_Hidden", "SlotsSH_Hidden"])],
+                "bdsp" => [("PKHeX.Core.Encounters8b",  ["SlotsBD_OW", "SlotsSP_OW",
+                                                          "SlotsBD_UG", "SlotsSP_UG",
+                                                          "SlotsBD", "SlotsSP"])],
+                _      => [("PKHeX.Core.Encounters9",   ["Slots"])],  // sv & plza both Gen9
             };
-            var areaType = assembly.GetType(areaTypeName);
-            if (areaType == null) return [];
 
-            var areaArrayType = areaType.MakeArrayType();
-            var allAreas      = new List<object>();
-            var bindAll       = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
-
-            // Only check types that look like encounter databases
-            foreach (var type in assembly.GetTypes()
-                .Where(t => t.IsAbstract && t.IsSealed
-                    && (t.Name.StartsWith("Encounter") || t.Name.StartsWith("Encounters"))))
+            foreach (var (cls, fnames) in targets)
             {
-                FieldInfo[] fields;
-                try { fields = type.GetFields(bindAll); }
-                catch { continue; }
-
-                foreach (var field in fields.Where(f => f.FieldType == areaArrayType))
+                var type = asm.GetType(cls);
+                if (type == null) continue;
+                foreach (var fname in fnames)
                 {
-                    object? value;
-                    try { value = field.GetValue(null); }
-                    catch { continue; }
-
-                    if (value is not IEnumerable areas) continue;
-                    foreach (var area in areas)
-                        allAreas.Add(area);
+                    if (type.GetField(fname, bind)?.GetValue(null) is not IEnumerable areas) continue;
+                    foreach (var area in areas) all.Add(area);
                 }
             }
-            return allAreas;
+            return all;
         }
         catch { return []; }
     }
