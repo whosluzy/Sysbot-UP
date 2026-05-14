@@ -447,7 +447,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         }
 
         session.Step = NextStep(BuilderStep.Species, session.GameType);
-        await DeferAsync().ConfigureAwait(false);
         await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
@@ -456,7 +455,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
     {
         var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
         if (!ok) return;
-        await DeferAsync().ConfigureAwait(false);
         session.SpeciesPage = Math.Max(0, session.SpeciesPage - 1);
         await UpdateAsync(session, userId).ConfigureAwait(false);
     }
@@ -466,7 +464,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
     {
         var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
         if (!ok) return;
-        await DeferAsync().ConfigureAwait(false);
         var total = BuilderData.TotalPages(BuilderData.GetSpecies(session.GameType).Count);
         session.SpeciesPage = Math.Min(total - 1, session.SpeciesPage + 1);
         await UpdateAsync(session, userId).ConfigureAwait(false);
@@ -481,7 +478,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         if (!ok) return;
         session.Alpha = true;
         session.Step  = NextStep(BuilderStep.Alpha, session.GameType);
-        await DeferAsync().ConfigureAwait(false);
         await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
@@ -492,7 +488,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         if (!ok) return;
         session.Alpha = false;
         session.Step  = NextStep(BuilderStep.Alpha, session.GameType);
-        await DeferAsync().ConfigureAwait(false);
         await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
@@ -505,7 +500,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         if (!ok) return;
         session.Shiny = true;
         session.Step  = NextStep(BuilderStep.Shiny, session.GameType);
-        await DeferAsync().ConfigureAwait(false);
         await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
@@ -516,7 +510,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         if (!ok) return;
         session.Shiny = false;
         session.Step  = NextStep(BuilderStep.Shiny, session.GameType);
-        await DeferAsync().ConfigureAwait(false);
         await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
@@ -531,7 +524,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         if (int.TryParse(value, out var lvl))
             session.Level = Math.Clamp(lvl, 1, 100);
         session.Step = NextStep(BuilderStep.Level, session.GameType);
-        await DeferAsync().ConfigureAwait(false);
         await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
@@ -544,7 +536,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         if (!ok) return;
         session.Item = ((SocketMessageComponent)Context.Interaction).Data.Values.FirstOrDefault() ?? "";
         session.Step = NextStep(BuilderStep.Item, session.GameType);
-        await DeferAsync().ConfigureAwait(false);
         await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
@@ -555,7 +546,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         if (!ok) return;
         session.Item = "";
         session.Step = NextStep(BuilderStep.Item, session.GameType);
-        await DeferAsync().ConfigureAwait(false);
         await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
@@ -564,7 +554,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
     {
         var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
         if (!ok) return;
-        await DeferAsync().ConfigureAwait(false);
         session.ItemPage = Math.Max(0, session.ItemPage - 1);
         await UpdateAsync(session, userId).ConfigureAwait(false);
     }
@@ -574,7 +563,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
     {
         var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
         if (!ok) return;
-        await DeferAsync().ConfigureAwait(false);
         var total = BuilderData.TotalPages(BuilderData.GetItems(session.GameType).Count);
         session.ItemPage = Math.Min(total - 1, session.ItemPage + 1);
         await UpdateAsync(session, userId).ConfigureAwait(false);
@@ -589,7 +577,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         if (!ok) return;
         session.Nature = ((SocketMessageComponent)Context.Interaction).Data.Values.FirstOrDefault() ?? "";
         session.Step   = NextStep(BuilderStep.Nature, session.GameType);
-        await DeferAsync().ConfigureAwait(false);
         await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
@@ -602,7 +589,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         if (!ok) return;
         session.Ball = ((SocketMessageComponent)Context.Interaction).Data.Values.FirstOrDefault() ?? "";
         session.Step = NextStep(BuilderStep.Ball, session.GameType);
-        await DeferAsync().ConfigureAwait(false);
         await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
@@ -615,7 +601,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         if (!ok) return;
         session.IVs  = ((SocketMessageComponent)Context.Interaction).Data.Values.FirstOrDefault() ?? "31/31/31/31/31/31";
         session.Step = NextStep(BuilderStep.IV, session.GameType);
-        await DeferAsync().ConfigureAwait(false);
         await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
@@ -629,7 +614,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         var raw      = ((SocketMessageComponent)Context.Interaction).Data.Values.FirstOrDefault() ?? "_none_";
         session.EVs  = raw == "_none_" ? "" : raw;
         session.Step = NextStep(BuilderStep.EV, session.GameType);
-        await DeferAsync().ConfigureAwait(false);
         await UpdateAsync(session, userId).ConfigureAwait(false);
     }
 
@@ -640,7 +624,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
     {
         var (ok, userId, session) = await CheckAsync(userIdStr).ConfigureAwait(false);
         if (!ok) return;
-        await DeferAsync().ConfigureAwait(false);
         session.Step = PrevStep(session.Step, session.GameType);
         await UpdateAsync(session, userId).ConfigureAwait(false);
     }
@@ -684,9 +667,16 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             await RespondAsync("❌ No active builder.", ephemeral: true).ConfigureAwait(false);
             return;
         }
-        await DeferAsync(ephemeral: true).ConfigureAwait(false);
-        await DeleteBuilderAsync(session).ConfigureAwait(false);
-        await FollowupAsync("Builder canceled.", ephemeral: true).ConfigureAwait(false);
+        // Update the builder in-place to a "cancelled" state (type 7 — no separate message)
+        if (Context.Interaction is SocketMessageComponent comp)
+        {
+            await comp.UpdateAsync(m =>
+            {
+                m.Embed      = new EmbedBuilder().WithTitle("❌ Builder Cancelled").WithColor(Color.Red)
+                                   .WithDescription("Your builder has been cancelled.").Build();
+                m.Components = new ComponentBuilder().Build();
+            }).ConfigureAwait(false);
+        }
     }
 
     // ── Admin command ─────────────────────────────────────────────────────────
@@ -1084,47 +1074,25 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
 
     // ── Update / Delete ───────────────────────────────────────────────────────
 
+    // Uses the CURRENT component interaction to update the source message in-place (type 7).
+    // This correctly handles ephemeral messages without needing the stored old-token reference.
     private async Task UpdateAsync(PokemonBuilderState session, ulong userId)
     {
-        if (session.BuilderMessage is not null)
+        if (Context.Interaction is SocketMessageComponent comp)
         {
-            // RestFollowupMessage.ModifyAsync uses the webhook endpoint — works for ephemeral messages
-            try
+            await comp.UpdateAsync(m =>
             {
-                await session.BuilderMessage.ModifyAsync(m =>
-                {
-                    m.Embed      = StepEmbed(session);
-                    m.Components = StepComponents(session, userId);
-                }).ConfigureAwait(false);
-                return;
-            }
-            catch { }
+                m.Embed      = StepEmbed(session);
+                m.Components = StepComponents(session, userId);
+            }).ConfigureAwait(false);
         }
-        // Fallback: non-ephemeral channel message
-        if (session.MessageId == 0) return;
-        try
-        {
-            if (await Context.Channel.GetMessageAsync(session.MessageId).ConfigureAwait(false)
-                is IUserMessage msg)
-                await msg.ModifyAsync(m =>
-                {
-                    m.Embed      = StepEmbed(session);
-                    m.Components = StepComponents(session, userId);
-                }).ConfigureAwait(false);
-        }
-        catch { }
     }
 
     private async Task DeleteBuilderAsync(PokemonBuilderState session)
     {
         if (session.BuilderMessage is not null)
         {
-            // RestFollowupMessage.DeleteAsync uses the webhook endpoint — works for ephemeral messages
-            try
-            {
-                await session.BuilderMessage.DeleteAsync().ConfigureAwait(false);
-                return;
-            }
+            try { await session.BuilderMessage.DeleteAsync().ConfigureAwait(false); return; }
             catch { }
         }
         if (session.MessageId == 0) return;
