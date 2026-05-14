@@ -14,25 +14,40 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
 
-      - name: Extract version from TradeBot.cs
+      - name: Bump patch version in TradeBot.cs
         id: version
         shell: pwsh
         run: |
-          $content = Get-Content "SysBot.Pokemon/Helpers/TradeBot.cs" -Raw
-          $match = [regex]::Match($content, 'Version\s*=\s*"v?([0-9.]+)"')
-          $ver = $match.Groups[1].Value
-          $build = "${{ github.run_number }}"
-          $tag = "v$ver-build.$build"
-          "VERSION=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          $file = "SysBot.Pokemon/Helpers/TradeBot.cs"
+          $content = Get-Content $file -Raw
+          $match = [regex]::Match($content, 'Version\s*=\s*"v?([0-9]+)\.([0-9]+)\.([0-9]+)"')
+          $major = $match.Groups[1].Value
+          $minor = $match.Groups[2].Value
+          $patch = [int]$match.Groups[3].Value + 1
+          $newVer = "$major.$minor.$patch"
+          $tag = "v$newVer"
+          $newContent = $content -replace 'Version\s*=\s*"v?[0-9]+\.[0-9]+\.[0-9]+"', "Version = `"$tag`""
+          [System.IO.File]::WriteAllText($file, $newContent)
+          "VERSION=$newVer" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "TAG=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "TITLE=PokedexMasterBot v$ver (Build $build)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          Write-Host "Version: $ver | Tag: $tag"
+          Write-Host "New version: $tag"
+
+      - name: Commit version bump
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add SysBot.Pokemon/Helpers/TradeBot.cs
+          git commit -m "Bump version to ${{ steps.version.outputs.TAG }} [skip ci]"
+          git push
 
       - name: Publish
         run: dotnet publish SysBot.Pokemon.WinForms/SysBot.Pokemon.WinForms.csproj -c Release
@@ -51,8 +66,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = "${{ steps.version.outputs.TAG }}"
-          $title = "${{ steps.version.outputs.TITLE }}"
           $exe = "${{ steps.exe.outputs.EXE_PATH }}"
           gh release create $tag "$exe" `
-            --title "$title" `
+            --title "PokedexMasterBot $tag" `
             --notes "Automated release — built from latest push to main."
