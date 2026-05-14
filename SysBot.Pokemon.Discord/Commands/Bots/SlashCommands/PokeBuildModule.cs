@@ -7,6 +7,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading.Tasks;
+using SysBot.Pokemon.Discord;
 
 namespace SysBot.Pokemon.Discord.Commands.Bots.SlashCommands;
 
@@ -118,8 +119,12 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             return;
         }
         await DeferAsync(ephemeral: true).ConfigureAwait(false);
-        await Context.Channel.SendMessageAsync(embed: BuildPanelEmbed(), components: BuildPanelComponents()).ConfigureAwait(false);
-        await FollowupAsync("✅ Builder panel posted! Pin it so it stays at the top.", ephemeral: true).ConfigureAwait(false);
+        var panelMsg = await Context.Channel.SendMessageAsync(
+            embed: PokeBuildPanelManager.CreatePanelEmbed(),
+            components: PokeBuildPanelManager.CreatePanelComponents()
+        ).ConfigureAwait(false);
+        PokeBuildPanelManager.Register(Context.Channel.Id, panelMsg.Id);
+        await FollowupAsync("✅ Builder panel posted! The bot will keep it at the bottom automatically.", ephemeral: true).ConfigureAwait(false);
     }
 
     // Kept as fallback — slash commands still work alongside the panel
@@ -565,33 +570,4 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         catch { /* already deleted */ }
     }
 
-    // ─── Panel embed & components ─────────────────────────────────────────────
-
-    private static Embed BuildPanelEmbed()
-    {
-        return new EmbedBuilder()
-            .WithTitle("🔨 Pokémon Builder")
-            .WithColor(Color.Gold)
-            .WithDescription(
-                "Want a Pokémon? Click the button for your game below!\n\n" +
-                "You'll be guided step by step — no commands needed. " +
-                "Fill in the name, level, IVs, moves, and more, then hit **Submit Trade** to get in the queue!\n​")
-            .AddField("🐾 What you can set",
-                "Species • Level • Nature • Shiny ✨\n" +
-                "IVs & EVs • Held Item • Poké Ball • Moves ⚔️\n" +
-                "Tera Type 🧬 (SV) • Alpha ⭐ (LA/PLZA)", inline: false)
-            .WithFooter($"PokedexMasterBot {TradeBot.Version} • Tap a button to start building!")
-            .Build();
-    }
-
-    private static MessageComponent BuildPanelComponents()
-    {
-        return new ComponentBuilder()
-            .WithButton("🟣 Scarlet / Violet",  "pb_start_sv",   ButtonStyle.Primary,   row: 0)
-            .WithButton("🏔️ Legends: Arceus",   "pb_start_la",   ButtonStyle.Primary,   row: 0)
-            .WithButton("🗼 Legends: Z-A",       "pb_start_plza", ButtonStyle.Primary,   row: 0)
-            .WithButton("⚔️ Sword / Shield",     "pb_start_swsh", ButtonStyle.Secondary, row: 1)
-            .WithButton("💎 BDSP",               "pb_start_bdsp", ButtonStyle.Secondary, row: 1)
-            .Build();
-    }
 }

@@ -474,6 +474,9 @@ public sealed partial class SysCord<T> : IDisposable where T : PKM, new()
                 await _commands.RemoveModuleAsync(module).ConfigureAwait(false);
         }
 
+        // Load sticky panel config
+        PokeBuildPanelManager.Load();
+
         // Initialize Slash Commands (Interaction Modules)
         await _interactions.AddModulesAsync(assembly, _services).ConfigureAwait(false);
         foreach (var t in assembly.DefinedTypes.Where(z => z.IsSubclassOf(typeof(InteractionModuleBase<SocketInteractionContext>)) && z.IsGenericType))
@@ -718,6 +721,9 @@ public sealed partial class SysCord<T> : IDisposable where T : PKM, new()
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
+            // Sticky panel: keep the builder embed at the bottom of its channel
+            await PokeBuildPanelManager.OnMessageReceivedAsync(arg).ConfigureAwait(false);
+
             if (arg is not SocketUserMessage msg)
                 return;
 
@@ -848,6 +854,9 @@ public sealed partial class SysCord<T> : IDisposable where T : PKM, new()
         // Restore Logging
         LogModule.RestoreLogging(_client, Hub.Config.Discord);
         TradeStartModule<T>.RestoreTradeStarting(_client);
+
+        // Restore sticky builder panels in their channels
+        await PokeBuildPanelManager.RestorePanelsAsync(_client).ConfigureAwait(false);
 
         // Don't let it load more than once in case of Discord hiccups.
         await Log(new LogMessage(LogSeverity.Info, "LoadLoggingAndEcho()", "Logging and Echo channels loaded!")).ConfigureAwait(false);
