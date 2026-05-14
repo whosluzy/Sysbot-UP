@@ -82,11 +82,11 @@ public static class EmbedHelper
             }
 
             var embed = new EmbedBuilder()
-                .WithTitle("Notice...")
+                .WithTitle("⚠️ Heads Up!")
                 .WithDescription(message)
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-legalityerror.gif")
-                .WithColor(Color.Red)
+                .WithColor(Color.Orange)
                 .Build();
 
             await dm.SendMessageAsync(embed: embed).ConfigureAwait(false);
@@ -124,8 +124,9 @@ public static class EmbedHelper
             }
 
             var embed = new EmbedBuilder()
-                .WithTitle("Trade Canceled...")
-                .WithDescription($"Your trade was canceled.\n**Reason**: {reason}")
+                .WithTitle("😬 Uh Oh! Trade Canceled")
+                .WithDescription($"Something went wrong and your trade couldn't be completed. Don't worry though — you can try again!\n\n**What happened:** {reason}")
+                .WithFooter("Feel free to resubmit your trade anytime!")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-uhoherror.gif")
                 .WithColor(Color.Red)
@@ -166,8 +167,9 @@ public static class EmbedHelper
             }
 
             var embed = new EmbedBuilder()
-                .WithTitle("Here's your Link Trade Code!")
-                .WithDescription($"# {code:0000 0000}\n*I'll notify you when your trade starts!*")
+                .WithTitle("🎟️ Your Trade Code is Ready!")
+                .WithDescription($"# {code:0000 0000}\n*Hang tight — I'll DM you again the moment your trade is about to begin!*")
+                .WithFooter("Keep this code handy!")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-tradecode.gif")
                 .WithColor(Color.Gold)
@@ -212,8 +214,9 @@ public static class EmbedHelper
             }
 
             var embed = new EmbedBuilder()
-                .WithTitle("Trade Completed!")
-                .WithDescription(message)
+                .WithTitle("✅ Trade Complete — Enjoy!")
+                .WithDescription($"{message}\n\nThanks for trading with us! Hope to see you again soon. 🎉")
+                .WithFooter("Have fun with your new Pokémon!")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl(thumbnailUrl)
                 .WithColor(Color.Teal)
@@ -249,8 +252,9 @@ public static class EmbedHelper
             }
 
             var embed = new EmbedBuilder()
-                .WithTitle("Loading the Trade Menu...")
-                .WithDescription($"**Pokemon**: {speciesName}\n**Trade Code**: {code:0000 0000}")
+                .WithTitle("🚀 Almost There — Opening Trade Menu!")
+                .WithDescription($"**Pokémon**: {speciesName}\n**Trade Code**: {code:0000 0000}\n\n*The bot is entering the trade menu now. Get ready!*")
+                .WithFooter("Stay on the trade screen!")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-initializingbot.gif")
                 .WithColor(Color.Green);
@@ -296,8 +300,9 @@ public static class EmbedHelper
             }
 
             var embed = new EmbedBuilder()
-                .WithTitle($"Now Searching...")
-                .WithDescription($"**Waiting For**: {trainerName}\n**My IGN**: {inGameName}\n\n**Insert Trade Code in Game & Begin Searching!**")
+                .WithTitle("🔍 Searching for You!")
+                .WithDescription($"**Looking for**: {trainerName}\n**My IGN**: {inGameName}\n\n**Insert Trade Code in Game & Begin Searching!**")
+                .WithFooter("See you in the trade room! 👋")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-nowsearching.gif")
                 .WithColor(Color.DarkGreen);

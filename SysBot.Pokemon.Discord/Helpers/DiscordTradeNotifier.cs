@@ -107,16 +107,16 @@ public class DiscordTradeNotifier<T> : IPokeTradeNotifier<T>, IDisposable
                         // Send notification that they're up next - only sent ONCE
                         _almostUpNotificationSent = true;
 
-                        var batchInfo = TotalBatchTrades > 1 ? $"\n\n**Important:** This is a batch trade with {TotalBatchTrades} Pokémon. Please stay in the trade until all are completed!" : "";
+                        var batchInfo = TotalBatchTrades > 1 ? $"\n\n📦 **Heads up!** This is a batch trade with **{TotalBatchTrades} Pokémon**. Stay in the trade until all of them come through!" : "";
 
                         var upNextEmbed = new EmbedBuilder
                         {
                             Color = Color.Gold,
-                            Title = "🎯 You're Up Next!",
-                            Description = $"Your trade will begin very soon. Please be ready!{batchInfo}",
+                            Title = "🌟 You're Up Next — Get Ready!",
+                            Description = $"Your trade is about to start any second now. Open the trade menu and get ready!{batchInfo}",
                             Footer = new EmbedFooterBuilder
                             {
-                                Text = "Get ready to connect!"
+                                Text = "Almost there — don't keep me waiting! 😄"
                             },
                             Timestamp = DateTimeOffset.Now
                         }.Build();
@@ -162,17 +162,17 @@ public class DiscordTradeNotifier<T> : IPokeTradeNotifier<T>, IDisposable
             _lastReportedPosition = currentPosition;
 
             var batchDescription = TotalBatchTrades > 1
-                ? $"Your batch trade request ({TotalBatchTrades} Pokémon) has been queued.\n\n⚠️ **Important Instructions:**\n• Stay in the trade for all {TotalBatchTrades} trades\n• Have all {TotalBatchTrades} Pokémon ready to trade\n• Do not exit until you see the completion message\n\n**Queue Position**: {currentPosition}"
-                : $"Your trade request has been queued.\n**Queue Position**: {currentPosition}";
+                ? $"🎉 Your batch trade for **{TotalBatchTrades} Pokémon** is in the queue!\n\n📋 **Quick Reminders:**\n• Stay in the trade for all {TotalBatchTrades} rounds\n• Have your Pokémon ready before it's your turn\n• Wait for the completion message before leaving\n\n**Your Position:** #{currentPosition}"
+                : $"🎉 You're in the queue! Sit tight while we get things ready for you.\n\n**Your Position:** #{currentPosition}";
 
             var initialEmbed = new EmbedBuilder
             {
                 Color = Color.Green,
-                Title = TotalBatchTrades > 1 ? "🎁 Batch Trade Request Queued" : "Trade Request Queued",
+                Title = TotalBatchTrades > 1 ? "📦 Batch Trade Queued!" : "✨ Trade Request Queued!",
                 Description = batchDescription,
                 Footer = new EmbedFooterBuilder
                 {
-                    Text = $"Estimated wait time: {(currentETA > 0 ? $"{currentETA} minutes" : "Less than a minute")}"
+                    Text = $"Estimated wait: {(currentETA > 0 ? $"~{currentETA} minute(s)" : "Less than a minute")} — we'll DM you when it's your turn!"
                 },
                 Timestamp = DateTimeOffset.Now
             }.Build();
