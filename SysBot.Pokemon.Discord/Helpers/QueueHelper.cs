@@ -241,7 +241,7 @@ public static class QueueHelper<T> where T : PKM, new()
                 if (homeTrack.HasTracker && isNonNative)
                 {
                     embedBuilder.Footer.IconUrl = "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/exclamation.gif";
-                    embedBuilder.AddField("**__Notice__**: **This Pokemon is Non-Native & Has Home Tracker.**", "*AutoOT not applied.*");
+                    embedBuilder.AddField("**__Notice__**: **This Pokemon is Non-Native & Has Home Tracker.**", "*AutoOT not applied.*\nPlease use a file with home tracker instead of word format if you wish to transfer it to HOME.");
                 }
                 else if (homeTrack.HasTracker)
                 {
@@ -251,7 +251,7 @@ public static class QueueHelper<T> where T : PKM, new()
                 else if (isNonNative)
                 {
                     embedBuilder.Footer.IconUrl = "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/exclamation.gif";
-                    embedBuilder.AddField("**__Notice__**: **This Pokemon is Non-Native.**", "*Cannot enter HOME & AutoOT not applied.*");
+                    embedBuilder.AddField("**__Notice__**: **This Pokemon is Non-Native.**", "*Cannot enter HOME & AutoOT not applied.*\nPlease use a file with home tracker instead of word format if you wish to transfer it to HOME.");
                 }
             }
             else if (isNonNative)
@@ -439,6 +439,7 @@ public static class QueueHelper<T> where T : PKM, new()
                         }
                         footerText += $"\nWait Estimate: {baseEta:F1} min(s) for batch";
                     }
+                    footerText += $"\nPokedexMasterBot {TradeBot.Version}";
 
                     // Create embed
                     var embedBuilder = new EmbedBuilder()
