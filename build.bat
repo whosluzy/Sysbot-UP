@@ -1,5 +1,5 @@
 @echo off
-title FusionBot Builder
+title PokedexMasterBot Builder
 cd /d "%~dp0"
 
 echo.
@@ -16,7 +16,7 @@ if errorlevel 1 (
 
 echo.
 echo ========================================
-echo  Building FusionBot exe...
+echo  Building PokedexMasterBot exe...
 echo ========================================
 dotnet publish SysBot.Pokemon.WinForms/SysBot.Pokemon.WinForms.csproj -c Release
 if errorlevel 1 (

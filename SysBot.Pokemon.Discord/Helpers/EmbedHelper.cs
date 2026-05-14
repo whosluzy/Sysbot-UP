@@ -85,7 +85,7 @@ public static class EmbedHelper
                 .WithTitle("Notice")
                 .WithDescription(message)
                 .AddField("Need Help?", "If you have questions or concerns, please contact a moderator.", false)
-                .WithFooter("FusionBot Notification")
+                .WithFooter("PokedexMasterBot Notification")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-legalityerror.gif")
                 .WithColor(Color.Orange)

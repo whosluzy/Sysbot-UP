@@ -617,14 +617,14 @@ public static class UpdateManager
                                         int processId = 0;
                                         try
                                         {
-                                            var processes = Process.GetProcessesByName("FusionBot");
+                                            var processes = Process.GetProcessesByName("PokedexMasterBot");
                                             foreach (var proc in processes)
                                             {
                                                 try
                                                 {
                                                     var portFile = Path.Combine(
                                                         Path.GetDirectoryName(proc.MainModule?.FileName ?? "") ?? "",
-                                                        $"FusionBot_{proc.Id}.port"
+                                                        $"PokedexMasterBot_{proc.Id}.port"
                                                     );
 
                                                     if (File.Exists(portFile))
@@ -678,7 +678,7 @@ public static class UpdateManager
         // Also check for local PokeBot processes with port files (fallback method)
         try
         {
-            var otherProcesses = Process.GetProcessesByName("FusionBot")
+            var otherProcesses = Process.GetProcessesByName("PokedexMasterBot")
                 .Where(p => p.Id != Environment.ProcessId)
                 .Take(10); // Limit to prevent resource exhaustion
 
@@ -696,7 +696,7 @@ public static class UpdateManager
 
                     var portFile = Path.Combine(
                         Path.GetDirectoryName(sanitizedPath) ?? "",
-                        $"FusionBot_{process.Id}.port"
+                        $"PokedexMasterBot_{process.Id}.port"
                     );
 
                     var safePortFile = ValidateAndSanitizePath(portFile);
@@ -1465,7 +1465,7 @@ public static class UpdateManager
         try
         {
             var baseDir = Path.GetDirectoryName(Application.ExecutablePath) ?? "";
-            var portFile = Path.Combine(baseDir, $"FusionBot_{Environment.ProcessId}.port");
+            var portFile = Path.Combine(baseDir, $"PokedexMasterBot_{Environment.ProcessId}.port");
 
             var safePortFile = ValidateAndSanitizePath(portFile);
             if (safePortFile != null && File.Exists(safePortFile))
@@ -1644,7 +1644,7 @@ public static class UpdateManager
         string tempPath = Path.Combine(Path.GetTempPath(), $"{Path.GetFileNameWithoutExtension(originalFileName)}_{Guid.NewGuid()}.exe");
 
         using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-        client.DefaultRequestHeaders.Add("User-Agent", "FusionBot");
+        client.DefaultRequestHeaders.Add("User-Agent", "PokedexMasterBot");
 
         var response = await client.GetAsync(downloadUrl, cancellationToken);
         response.EnsureSuccessStatusCode();
@@ -1667,8 +1667,8 @@ public static class UpdateManager
             string applicationDirectory = Path.GetDirectoryName(currentExePath) ?? "";
             string executableName = Path.GetFileName(currentExePath);
 
-            // Use FusionBot.exe as the target name (standardized name)
-            string targetExeName = "FusionBot.exe";
+            // Use PokedexMasterBot.exe as the target name (standardized name)
+            string targetExeName = "PokedexMasterBot.exe";
             string targetExePath = Path.Combine(applicationDirectory, targetExeName);
             string backupPath = Path.Combine(applicationDirectory, $"{executableName}.backup");
 
@@ -1677,7 +1677,7 @@ public static class UpdateManager
             string batchContent = @$"
 @echo off
 timeout /t 2 /nobreak >nul
-echo Updating FusionBot...
+echo Updating PokedexMasterBot...
 rem Backup current version
 if exist ""{currentExePath}"" (
     if exist ""{backupPath}"" (

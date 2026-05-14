@@ -398,7 +398,7 @@ public static class RestartManager
 
         try
         {
-            var processes = Process.GetProcessesByName("FusionBot")
+            var processes = Process.GetProcessesByName("PokedexMasterBot")
                 .Where(p => p.Id != Environment.ProcessId);
 
             foreach (var process in processes)
@@ -433,7 +433,7 @@ public static class RestartManager
             if (string.IsNullOrEmpty(exePath))
                 return null;
 
-            var portFile = Path.Combine(Path.GetDirectoryName(exePath)!, $"FusionBot_{process.Id}.port");
+            var portFile = Path.Combine(Path.GetDirectoryName(exePath)!, $"PokedexMasterBot_{process.Id}.port");
             if (!File.Exists(portFile))
                 return null;
 
@@ -722,7 +722,7 @@ public static class RestartManager
             pids.Add(Environment.ProcessId);
 
             // Add all PokeBot process IDs
-            var processes = Process.GetProcessesByName("FusionBot");
+            var processes = Process.GetProcessesByName("PokedexMasterBot");
             foreach (var process in processes)
             {
                 try
@@ -948,7 +948,7 @@ public static class RestartManager
 
         try
         {
-            var processes = Process.GetProcessesByName("FusionBot")
+            var processes = Process.GetProcessesByName("PokedexMasterBot")
                 .Where(p => p.Id != Environment.ProcessId);
 
             foreach (var process in processes)
@@ -959,7 +959,7 @@ public static class RestartManager
                     if (string.IsNullOrEmpty(exePath))
                         continue;
 
-                    var portFile = Path.Combine(Path.GetDirectoryName(exePath)!, $"FusionBot_{process.Id}.port");
+                    var portFile = Path.Combine(Path.GetDirectoryName(exePath)!, $"PokedexMasterBot_{process.Id}.port");
                     if (!File.Exists(portFile))
                         continue;
 

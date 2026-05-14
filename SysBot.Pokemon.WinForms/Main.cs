@@ -385,7 +385,7 @@ namespace SysBot.Pokemon.WinForms
             }
             // Load other form shit and/or save valuable shit to config
             LoadControls();
-            Text = $"{(string.IsNullOrEmpty(Config.Hub.BotName) ? "FusionBot |" : Config.Hub.BotName)} {TradeBot.Version} | Mode: {Config.Mode}";
+            Text = $"{(string.IsNullOrEmpty(Config.Hub.BotName) ? "PokedexMasterBot |" : Config.Hub.BotName)} {TradeBot.Version} | Mode: {Config.Mode}";
             UpdateBackgroundImage(Config.Mode);        // Call the method to update image in leftSidePanel
             UpdateUpperImage(Config.Mode);        // Call the method to update image in panelTitleBar
             LoadThemeOptions();
@@ -507,7 +507,7 @@ namespace SysBot.Pokemon.WinForms
                 {
                     Invoke((Action)(() =>
                     {
-                        Text = $"{(string.IsNullOrEmpty(Config.Hub.BotName) ? "FusionBot |" : Config.Hub.BotName)} {TradeBot.Version} | Mode: {newMode}";
+                        Text = $"{(string.IsNullOrEmpty(Config.Hub.BotName) ? "PokedexMasterBot |" : Config.Hub.BotName)} {TradeBot.Version} | Mode: {newMode}";
                         lblTitle.Text = Text;
                         UpdateBackgroundImage(newMode);
                         UpdateUpperImage(newMode);
@@ -515,7 +515,7 @@ namespace SysBot.Pokemon.WinForms
                 }
                 else
                 {
-                    Text = $"{(string.IsNullOrEmpty(Config.Hub.BotName) ? "FusionBot |" : Config.Hub.BotName)} {TradeBot.Version} | Mode: {newMode}";
+                    Text = $"{(string.IsNullOrEmpty(Config.Hub.BotName) ? "PokedexMasterBot |" : Config.Hub.BotName)} {TradeBot.Version} | Mode: {newMode}";
                     lblTitle.Text = Text;
                     UpdateBackgroundImage(newMode);
                     UpdateUpperImage(newMode);
@@ -606,7 +606,7 @@ namespace SysBot.Pokemon.WinForms
                     string? dirPath = Path.GetDirectoryName(exePath);
                     if (!string.IsNullOrEmpty(dirPath))
                     {
-                        string portInfoPath = Path.Combine(dirPath, $"FusionBot_{Environment.ProcessId}.port");
+                        string portInfoPath = Path.Combine(dirPath, $"PokedexMasterBot_{Environment.ProcessId}.port");
                         if (File.Exists(portInfoPath))
                             File.Delete(portInfoPath);
                     }
@@ -1687,7 +1687,7 @@ namespace SysBot.Pokemon.WinForms
         // Download the fonts file
         private async void DownloadFonts()
         {
-            const string downloadUrl = "https://github.com/Secludedly/FusionBot/raw/refs/heads/main/.extra/Fonts.7z";
+            const string downloadUrl = "https://github.com/Secludedly/PokedexMasterBot/raw/refs/heads/main/.extra/Fonts.7z";
 
             try
             {

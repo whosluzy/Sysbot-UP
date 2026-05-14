@@ -7,17 +7,17 @@
     </a>
 </h1>
 
-> ⚠️ **Font Notice:** If the program's fonts are not displaying properly for you, download them [here](https://github.com/Secludedly/FusionBot/blob/main/.extra/Fonts.7z) and install them on your machine, or use the "Self-Contained" builds of the bot.
+> ⚠️ **Font Notice:** If the program's fonts are not displaying properly for you, download them [here](https://github.com/Secludedly/PokedexMasterBot/blob/main/.extra/Fonts.7z) and install them on your machine, or use the "Self-Contained" builds of the bot.
 
 <p align="center">
   <i>A community-driven SysBot.NET project with a gorgeous UI, supporting LGPE, SWSH, BDSP, PLA, SV, and PLZA</i><br>
-    Now rebranded from <b>ZE FusionBot -> FusionBot</b>.
+    Now rebranded from <b>ZE PokedexMasterBot -> PokedexMasterBot</b>.
 </p>
 <h3 align="center">
   Visit <a href="https://FreeMons.Org">FreeMons.Org</a> to join Zeraora's Emporium!
 </h3>
 <p align="center">
-    <img src="https://visitor-badge.laobi.icu/badge?page_id=Secludedly.FusionBot" alt="Visitors">
+    <img src="https://visitor-badge.laobi.icu/badge?page_id=Secludedly.PokedexMasterBot" alt="Visitors">
 </p>
 <h4 align="center">
   <a href="https://FreeMons.Org">
@@ -32,7 +32,7 @@
 
 ## 🚀 Introduction
 
-`FusionBot` is a powerful and open-source SysBot.NET fork, initially tailored for the Discord server [Zeraora's Emporium](https://FreeMons.Org). While originally built for internal server use, it has transformed into a beautiful, community-powered GUI with dozens of integrated forks and unique enhancements, catering to every Nintendo Switch Pokémon game.
+`PokedexMasterBot` is a powerful and open-source SysBot.NET fork, initially tailored for the Discord server [Zeraora's Emporium](https://FreeMons.Org). While originally built for internal server use, it has transformed into a beautiful, community-powered GUI with dozens of integrated forks and unique enhancements, catering to every Nintendo Switch Pokémon game.
 
 ---
 <p align="center">
@@ -41,9 +41,9 @@
 
 ## 🧬 Community Roots & Inspirations
 
-> **FusionBot is a fusion by design — built from years of shared ideas, forks, experiments, and respect for the SysBot.NET ecosystem.**
+> **PokedexMasterBot is a fusion by design — built from years of shared ideas, forks, experiments, and respect for the SysBot.NET ecosystem.**
 
-FusionBot was created, inspired, and upgraded through time, in pieces, through a collaboration of multiple developers of all skill levels with bright ideas and a hobby. There's many I know, and many I don't know, but I have respect and appreciation for them all. If they didn't inspire or help, simply diving into their code and learning C# over the years through their contributions helped me get to this point to continue to refine FusionBot and is also what allowed this project to grow into one of - if not *the best* SysBot program to date, in large to **[@hexbyt3's](https://github.com/hexbyt3)** **[PokeBot](https://github.com/hexbyt3/PokeBot)**, another contender as *the best* SysBot.
+PokedexMasterBot was created, inspired, and upgraded through time, in pieces, through a collaboration of multiple developers of all skill levels with bright ideas and a hobby. There's many I know, and many I don't know, but I have respect and appreciation for them all. If they didn't inspire or help, simply diving into their code and learning C# over the years through their contributions helped me get to this point to continue to refine PokedexMasterBot and is also what allowed this project to grow into one of - if not *the best* SysBot program to date, in large to **[@hexbyt3's](https://github.com/hexbyt3)** **[PokeBot](https://github.com/hexbyt3/PokeBot)**, another contender as *the best* SysBot.
 
 The projects below represent **the strongest influences** in the SysBot.NET space and the inspiration behind calling this a **Fusion** bot.
 
@@ -80,8 +80,8 @@ The projects below represent **the strongest influences** in the SysBot.NET spac
   One of the first major user-driven evolutions of SysBot.
 
 - **[PokeBot](https://github.com/hexbyt3/PokeBot)**  
-  Created by **[@hexbyt3](https://github.com/hexbyt3)**, a brilliant friend of mine — and the **primary foundation of FusionBot**.  
-  Much of FusionBot’s structure, philosophy, and stability originates here, alongside deep collaboration and shared ideas between repos.
+  Created by **[@hexbyt3](https://github.com/hexbyt3)**, a brilliant friend of mine — and the **primary foundation of PokedexMasterBot**.  
+  Much of PokedexMasterBot’s structure, philosophy, and stability originates here, alongside deep collaboration and shared ideas between repos.
 
 ---
 
@@ -94,13 +94,13 @@ A fork I've been following for update inspiration with great C# knowledge
 - **[ManuBot.NET (9B1td0 fork)](https://github.com/9B1td0/ManuBot.NET)** — by **[@9B1td0](https://github.com/9B1td0)**
 I believe this is a fork of ManuBot.NET but seems almost collaborated with the original.
 - **[DudeBot.NET](https://github.com/Havokx89/DudeBot.NET)** — by **[@Havokx89](https://github.com/Havokx89)**
-A fun and fused iteration combining a lot of FusionBot that I follow for various integration ideas.
+A fun and fused iteration combining a lot of PokedexMasterBot that I follow for various integration ideas.
 - **[ZenBot.NET](https://github.com/Omni-KingZeno/ZenBot.NET)** — by **[@Omni-KingZeno](https://github.com/Omni-KingZeno)**
 A fork of ManuBot.NET that I follow and quite enjoy getting inspiration from. Plus, great bot name and username. I'm a DBtard.
 - **[TradeBot](https://github.com/jonklee99/Tradebot)** — by **[@jonklee99](https://github.com/jonklee99)** with **[@joseph11024](https://github.com/joseph11024)**
 Created by a good friend that tends to use their own ideas that I've happily borrowed from before.
-- **[ZE-FusionBot (Taku1991 fork)](https://github.com/Taku1991/ZE-FusionBot)** — by **[@Taku1991](https://github.com/Taku1991)**.  
-An independently evolved fork that shares ideas, structure, and inspiration within the FusionBot ecosystem that I myself have proudly borrowed from.
+- **[ZE-PokedexMasterBot (Taku1991 fork)](https://github.com/Taku1991/ZE-PokedexMasterBot)** — by **[@Taku1991](https://github.com/Taku1991)**.  
+An independently evolved fork that shares ideas, structure, and inspiration within the PokedexMasterBot ecosystem that I myself have proudly borrowed from.
 
 
 </details>
@@ -139,22 +139,22 @@ An independently evolved fork that shares ideas, structure, and inspiration with
     <img src="https://i.imgur.com/VZ2oeOy.gif" style="max-width: 100%; height: auto;">
 </p>
 <p align="center">
-    <img src="https://raw.githubusercontent.com/Secludedly/FusionBot/main/.readme/README_GeneralOverlook2.gif" style="max-width: 100%; height: auto;">
+    <img src="https://raw.githubusercontent.com/Secludedly/PokedexMasterBot/main/.readme/README_GeneralOverlook2.gif" style="max-width: 100%; height: auto;">
 </p>
 <p align="center">
-    <img src="https://raw.githubusercontent.com/Secludedly/FusionBot/main/.readme/README_Environment2.gif" style="max-width: 100%; height: auto;">
+    <img src="https://raw.githubusercontent.com/Secludedly/PokedexMasterBot/main/.readme/README_Environment2.gif" style="max-width: 100%; height: auto;">
 </p>
 <p align="center">
-    <img src="https://raw.githubusercontent.com/Secludedly/FusionBot/main/.readme/README_Reload2.gif" style="max-width: 100%; height: auto;">
+    <img src="https://raw.githubusercontent.com/Secludedly/PokedexMasterBot/main/.readme/README_Reload2.gif" style="max-width: 100%; height: auto;">
 </p>
 <p align="center">
-    <img src="https://raw.githubusercontent.com/Secludedly/FusionBot/main/.readme/README_Themes2.gif" style="max-width: 100%; height: auto;">
+    <img src="https://raw.githubusercontent.com/Secludedly/PokedexMasterBot/main/.readme/README_Themes2.gif" style="max-width: 100%; height: auto;">
 </p>
 <p align="center">
-    <img src="https://raw.githubusercontent.com/Secludedly/FusionBot/main/.readme/README_Starting2.gif" style="max-width: 100%; height: auto;">
+    <img src="https://raw.githubusercontent.com/Secludedly/PokedexMasterBot/main/.readme/README_Starting2.gif" style="max-width: 100%; height: auto;">
 </p>
 <p align="center">
-    <img src="https://raw.githubusercontent.com/Secludedly/FusionBot/main/.readme/README_Update2.gif" style="max-width: 100%; height: auto;">
+    <img src="https://raw.githubusercontent.com/Secludedly/PokedexMasterBot/main/.readme/README_Update2.gif" style="max-width: 100%; height: auto;">
 </p>
 
 ---
@@ -171,11 +171,11 @@ An independently evolved fork that shares ideas, structure, and inspiration with
   <tr>
     <td align="center" width="50%">
       <strong>Switch Remote for PC</strong><br />
-      <img src="https://raw.githubusercontent.com/Secludedly/FusionBot/main/.readme/README_SwitchRemoteForPC.gif" alt="Switch Remote for PC" width="100%" />
+      <img src="https://raw.githubusercontent.com/Secludedly/PokedexMasterBot/main/.readme/README_SwitchRemoteForPC.gif" alt="Switch Remote for PC" width="100%" />
     </td>
     <td align="center" width="50%">
       <strong>SysDVR</strong><br />
-      <img src="https://raw.githubusercontent.com/Secludedly/FusionBot/main/.readme/README_SysDVR.gif" alt="SysDVR" width="100%" />
+      <img src="https://raw.githubusercontent.com/Secludedly/PokedexMasterBot/main/.readme/README_SysDVR.gif" alt="SysDVR" width="100%" />
     </td>
   </tr>
 
@@ -183,11 +183,11 @@ An independently evolved fork that shares ideas, structure, and inspiration with
   <tr>
     <td align="center" width="50%">
       <strong>Batch Trading Archives</strong><br />
-      <img src="https://raw.githubusercontent.com/Secludedly/FusionBot/main/.readme/README_BatchArchive.gif" alt="Batch Trading Archives" width="100%" />
+      <img src="https://raw.githubusercontent.com/Secludedly/PokedexMasterBot/main/.readme/README_BatchArchive.gif" alt="Batch Trading Archives" width="100%" />
     </td>
     <td align="center" width="50%">
       <strong>Batch Trading Showdown</strong><br />
-      <img src="https://raw.githubusercontent.com/Secludedly/FusionBot/main/.readme/README_BatchShowdown.gif" alt="Batch Trading Showdown" width="100%" />
+      <img src="https://raw.githubusercontent.com/Secludedly/PokedexMasterBot/main/.readme/README_BatchShowdown.gif" alt="Batch Trading Showdown" width="100%" />
     </td>
   </tr>
 
@@ -195,11 +195,11 @@ An independently evolved fork that shares ideas, structure, and inspiration with
   <tr>
     <td align="center" width="50%">
       <strong>Peek & Video Feature</strong><br />
-      <img src="https://raw.githubusercontent.com/Secludedly/FusionBot/main/.readme/README_Peek+Video.gif" alt="Peek & Video Feature" width="100%" />
+      <img src="https://raw.githubusercontent.com/Secludedly/PokedexMasterBot/main/.readme/README_Peek+Video.gif" alt="Peek & Video Feature" width="100%" />
     </td>
     <td align="center" width="50%">
       <strong>Mystery Mon</strong><br />
-      <img src="https://raw.githubusercontent.com/Secludedly/FusionBot/main/.readme/README_MysteryMon.gif" alt="Mystery Mon" width="100%" />
+      <img src="https://raw.githubusercontent.com/Secludedly/PokedexMasterBot/main/.readme/README_MysteryMon.gif" alt="Mystery Mon" width="100%" />
     </td>
   </tr>
 </table>
@@ -409,7 +409,7 @@ An independently evolved fork that shares ideas, structure, and inspiration with
 
 ## 📝 Batch Commands to Showdown Format
 
-`FusionBot` supports converting batch commands from Discord messages into official Showdown Set formats. This allows easy bulk Pokémon trading with full customization of stats, moves, ribbons, and other metadata.
+`PokedexMasterBot` supports converting batch commands from Discord messages into official Showdown Set formats. This allows easy bulk Pokémon trading with full customization of stats, moves, ribbons, and other metadata.
 
 ### Supported Batch Command Mappings
 
@@ -423,7 +423,7 @@ An independently evolved fork that shares ideas, structure, and inspiration with
 | `.MetDate=` | `Met Date:` | Supports flexible date formats. |
 | `.StatNature=` | `Stat Nature:` | Accepts a Nature keyword. |
 | `~=Version=` | `Game:` or `Version:` | Supports full game names or abbreviations. |
-| `.MetLocation=` | `Met Location:` | [Numeric IDs](https://github.com/Secludedly/FusionBot?tab=readme-ov-file#-met-location-reference) & [Location names](https://github.com/Secludedly/FusionBot/blob/f72fded7b30c1c6a03bd1cf22f3366f88ec9b257/SysBot.Pokemon/Helpers/BatchCommandNormalizer.cs#L780) supported. |
+| `.MetLocation=` | `Met Location:` | [Numeric IDs](https://github.com/Secludedly/PokedexMasterBot?tab=readme-ov-file#-met-location-reference) & [Location names](https://github.com/Secludedly/PokedexMasterBot/blob/f72fded7b30c1c6a03bd1cf22f3366f88ec9b257/SysBot.Pokemon/Helpers/BatchCommandNormalizer.cs#L780) supported. |
 | `.HyperTrainFlags=` | `HyperTrain:` | True / False. |
 | `.HT_[STAT]=` | `HT:` | Supports HP, Atk, Def, SpA, SpD, Spe. |
 | `.Moves=` | `Moves:` | “Random” generates random moves. |
@@ -435,7 +435,7 @@ An independently evolved fork that shares ideas, structure, and inspiration with
 | `.SetIVs=` | `Set IVs:` | Accepts `Random`, or presets like `1IV`–`6IV`. |
 | `.GV_[STAT]=` | `GVs:` | Supports HP, Atk, Def, SpA, SpD, Spe. |
 | `.Marking[type]=` | `Markings:` | Diamond, Heart, Square, Star, Triangle, Circle in Red or Blue `Markings: Diamond=Red / Circle=Blue` etc. |
-| `.Characteristic=` | `Characteristic:` | Type out a [characteristic](https://github.com/Secludedly/FusionBot?tab=readme-ov-file#-characteristic-reference). |
+| `.Characteristic=` | `Characteristic:` | Type out a [characteristic](https://github.com/Secludedly/PokedexMasterBot?tab=readme-ov-file#-characteristic-reference). |
 | `.Nickname=` | `Nickname:` | Write "Suggest" for a random nickname pulled from code dictionary. |
 | `.MoveX_PP=` & `MoveX_PPUps=` | `PPUps:` | True / False, or a number from 0-3. Applied to all moves. |
 
@@ -443,7 +443,7 @@ An independently evolved fork that shares ideas, structure, and inspiration with
 
 ## 🧭 Slash Command Support
 
-FusionBot supports **modern Discord Slash Commands**.
+PokedexMasterBot supports **modern Discord Slash Commands**.
 
 ### 🎮 Available Slash Commands
 
@@ -532,7 +532,7 @@ Markings: Diamond=Red / Heart=Red / Square=Blue / Star=Blue / Triangle=Red / Cir
 ## ⚙️ Bot Functions
 
 ### 🧑‍🎓 AutoOT
-FusionBot automatically applies your **trainer information** based on the save file you’re currently using.  
+PokedexMasterBot automatically applies your **trainer information** based on the save file you’re currently using.  
 - Your **OT / TID / SID / OTGender** are applied automatically.  
 - To keep the trainer info in your own files, attach them with `t true`.  
 - For Showdown Sets, simply include the OT/TID/SID you want and AutoOT will then be disabled.  
@@ -542,7 +542,7 @@ This ensures all trades feel natural and consistent with your game, while still 
 ---
 
 ### 🔗 Link Trade Codes
-FusionBot assigns you a **personal static Link Trade Code** on your first trade.  
+PokedexMasterBot assigns you a **personal static Link Trade Code** on your first trade.  
 - This code is **unique to you** and stays the same for all future trades.  
 - To reset it: use `dtc` (your next trade gives you a new random code).  
 - To customize it: use `ctc 12345678` (sets your permanent code to whatever you choose).  
@@ -552,7 +552,7 @@ This makes trading smoother by removing guesswork, making your link code always 
 ---
 
 ### 🏅 Medals & Milestones
-Every trade you complete is tracked by FusionBot, and your **trade count** shows up in the footer of the trade embed.  
+Every trade you complete is tracked by PokedexMasterBot, and your **trade count** shows up in the footer of the trade embed.  
 - For every **50 trades**, you earn a new medal 🥇.  
 - You can check your medals anytime in your profile card with the `mi` command.  
 - It’s just for fun; a little **progression system** to show off your trading dedication.  
