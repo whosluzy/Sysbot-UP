@@ -282,9 +282,12 @@ public class DiscordTradeNotifier<T> : IPokeTradeNotifier<T>, IDisposable
         OnFinish?.Invoke(routine);
         StopPeriodicUpdates();
 
-        var baseMessage = msg == PokeTradeResult.ExceptionInternal
-            ? "ExceptionInternal\nPlease contact an ADMIN in the server. This bot could be offline."
-            : msg.ToString();
+        var baseMessage = msg switch
+        {
+            PokeTradeResult.ExceptionInternal => "ExceptionInternal\nPlease contact an ADMIN in the server. This bot could be offline.",
+            PokeTradeResult.NoTrainerFound => "NoTrainerFound\nMake sure you are using online mode in game on link trade. Try Again!",
+            _ => msg.ToString(),
+        };
 
         var cancelMessage = TotalBatchTrades > 1
             ? $"Batch trade canceled: {baseMessage} All remaining trades have been canceled."

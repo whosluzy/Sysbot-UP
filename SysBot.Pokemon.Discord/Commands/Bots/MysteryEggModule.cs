@@ -310,7 +310,7 @@ namespace SysBot.Pokemon.Discord
                 .WithAuthor(new EmbedAuthorBuilder()
                     .WithName($"Mystery Egg for {context.User.Username}")
                     .WithIconUrl(context.User.GetAvatarUrl() ?? context.User.GetDefaultAvatarUrl())
-                    .WithUrl("https://zepkm.com/pokecreator"));
+                    );
 
             return embedBuilder.Build();
         }
