@@ -1,0 +1,61 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Extract version from TradeBot.cs
+        id: version
+        shell: pwsh
+        run: |
+          $content = Get-Content "SysBot.Pokemon/Helpers/TradeBot.cs" -Raw
+          $match = [regex]::Match($content, 'Version\s*=\s*"v?([0-9.]+)"')
+          $ver = $match.Groups[1].Value
+          "VERSION=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "TAG=v$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Version: $ver"
+
+      - name: Publish
+        run: dotnet publish SysBot.Pokemon.WinForms/SysBot.Pokemon.WinForms.csproj -c Release
+
+      - name: Find published exe
+        id: exe
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem "SysBot.Pokemon.WinForms/bin/Release/net10.0-windows/win-x64/publish/" -Filter "*.exe" | Select-Object -First 1
+          "EXE_PATH=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Exe: $($exe.Name)"
+
+      - name: Delete existing release and tag if same version exists
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete "${{ steps.version.outputs.TAG }}" --yes 2>$null
+          git push origin --delete "${{ steps.version.outputs.TAG }}" 2>$null
+        continue-on-error: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: PokedexMasterBot ${{ steps.version.outputs.TAG }}
+          body: |
+            Automated release — built from latest push to main.
+          files: ${{ steps.exe.outputs.EXE_PATH }}
