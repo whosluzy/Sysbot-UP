@@ -15,11 +15,76 @@ public static class PokeBuildPanelManager
 {
     private static readonly string FilePath =
         Path.Combine(AppContext.BaseDirectory, "pokebuild_panels.json");
+    private static readonly string ConfigFilePath =
+        Path.Combine(AppContext.BaseDirectory, "pokebuild_config.json");
 
     // channelId → current panel messageId
     private static readonly ConcurrentDictionary<ulong, ulong> Panels = new();
     private static readonly ConcurrentDictionary<ulong, DateTime> LastRepost = new();
     private const int CooldownSeconds = 12;
+
+    // ─── Builder cooldown ─────────────────────────────────────────────────────
+
+    private static readonly ConcurrentDictionary<ulong, bool> CooldownRoles = new();
+    private static readonly ConcurrentDictionary<ulong, DateTime> UserLastUse = new();
+    private const int BuilderCooldownMinutes = 10;
+
+    public static bool ToggleCooldownRole(ulong roleId)
+    {
+        if (CooldownRoles.TryRemove(roleId, out _))
+        {
+            SaveConfig();
+            return false; // removed
+        }
+        CooldownRoles[roleId] = true;
+        SaveConfig();
+        return true; // added
+    }
+
+    public static IReadOnlyList<ulong> GetCooldownRoleIds() => [.. CooldownRoles.Keys];
+
+    public static (bool OnCooldown, TimeSpan Remaining) CheckCooldown(SocketGuildUser user)
+    {
+        if (!user.Roles.Any(r => CooldownRoles.ContainsKey(r.Id)))
+            return (false, TimeSpan.Zero);
+        if (!UserLastUse.TryGetValue(user.Id, out var last))
+            return (false, TimeSpan.Zero);
+        var elapsed = DateTime.UtcNow - last;
+        if (elapsed.TotalMinutes >= BuilderCooldownMinutes)
+            return (false, TimeSpan.Zero);
+        return (true, TimeSpan.FromMinutes(BuilderCooldownMinutes) - elapsed);
+    }
+
+    public static void MarkUsed(ulong userId) => UserLastUse[userId] = DateTime.UtcNow;
+
+    private static void LoadConfig()
+    {
+        if (!File.Exists(ConfigFilePath)) return;
+        try
+        {
+            var json = File.ReadAllText(ConfigFilePath);
+            var cfg  = JsonSerializer.Deserialize<PokeBuildConfig>(json);
+            if (cfg?.CooldownRoles is null) return;
+            foreach (var id in cfg.CooldownRoles)
+                CooldownRoles[id] = true;
+        }
+        catch { }
+    }
+
+    private static void SaveConfig()
+    {
+        try
+        {
+            var cfg = new PokeBuildConfig { CooldownRoles = [.. CooldownRoles.Keys] };
+            File.WriteAllText(ConfigFilePath, JsonSerializer.Serialize(cfg));
+        }
+        catch { }
+    }
+
+    private sealed class PokeBuildConfig
+    {
+        public ulong[] CooldownRoles { get; set; } = [];
+    }
 
     // ─── Game detection ───────────────────────────────────────────────────────
 
@@ -130,17 +195,20 @@ public static class PokeBuildPanelManager
 
     public static void Load()
     {
-        if (!File.Exists(FilePath)) return;
-        try
+        if (File.Exists(FilePath))
         {
-            var json = File.ReadAllText(FilePath);
-            var dict = JsonSerializer.Deserialize<Dictionary<string, ulong>>(json);
-            if (dict == null) return;
-            foreach (var (k, v) in dict)
-                if (ulong.TryParse(k, out var id))
-                    Panels[id] = v;
+            try
+            {
+                var json = File.ReadAllText(FilePath);
+                var dict = JsonSerializer.Deserialize<Dictionary<string, ulong>>(json);
+                if (dict != null)
+                    foreach (var (k, v) in dict)
+                        if (ulong.TryParse(k, out var id))
+                            Panels[id] = v;
+            }
+            catch { }
         }
-        catch { }
+        LoadConfig();
     }
 
     private static void Save()

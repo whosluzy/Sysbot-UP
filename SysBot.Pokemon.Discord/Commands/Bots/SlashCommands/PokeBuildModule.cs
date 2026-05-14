@@ -246,21 +246,24 @@ public enum BuilderStep { Species, Alpha, Shiny, Level, Item, Nature, Ball, IV, 
 // ─── Session state ─────────────────────────────────────────────────────────────
 public class PokemonBuilderState
 {
-    public string      GameType       = "sv";
-    public string      Species        = "";
-    public string      SpeciesDisplay = "";
-    public int         Level          = 50;
-    public string      Nature         = "";
-    public bool        Shiny          = false;
-    public bool        Alpha          = false;
-    public string      Item           = "";
-    public string      Ball           = "";
-    public string      IVs            = "31/31/31/31/31/31";
-    public string      EVs            = "";
-    public ulong       MessageId      = 0;
-    public BuilderStep Step           = BuilderStep.Species;
-    public int         SpeciesPage    = 0;
-    public int         ItemPage       = 0;
+    public string       GameType       = "sv";
+    public string       Species        = "";
+    public string       SpeciesDisplay = "";
+    public int          Level          = 50;
+    public string       Nature         = "";
+    public bool         Shiny          = false;
+    public bool         Alpha          = false;
+    public string       Item           = "";
+    public string       Ball           = "";
+    public string       IVs            = "31/31/31/31/31/31";
+    public string       EVs            = "";
+    public ulong        MessageId      = 0;
+    public BuilderStep  Step           = BuilderStep.Species;
+    public int          SpeciesPage    = 0;
+    public int          ItemPage       = 0;
+    // Stored so we can ModifyAsync / DeleteAsync the ephemeral followup
+    // RestFollowupMessage overrides these to use the webhook endpoint (not channel REST)
+    public IUserMessage? BuilderMessage = null;
 }
 
 // ─── Module ────────────────────────────────────────────────────────────────────
@@ -387,7 +390,22 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             await RespondAsync("❌ Server only.", ephemeral: true).ConfigureAwait(false);
             return;
         }
-        await DeferAsync(ephemeral: false).ConfigureAwait(false);
+
+        // Role-based cooldown check
+        if (Context.User is SocketGuildUser guildUser)
+        {
+            var (onCooldown, remaining) = PokeBuildPanelManager.CheckCooldown(guildUser);
+            if (onCooldown)
+            {
+                var mins = (int)Math.Ceiling(remaining.TotalMinutes);
+                await RespondAsync(
+                    $"⏰ You can use the builder again in **{mins} minute{(mins == 1 ? "" : "s")}**.",
+                    ephemeral: true).ConfigureAwait(false);
+                return;
+            }
+        }
+
+        await DeferAsync(ephemeral: true).ConfigureAwait(false);
 
         var session = new PokemonBuilderState
         {
@@ -398,9 +416,13 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
 
         var msg = await FollowupAsync(
             embed: StepEmbed(session),
-            components: StepComponents(session, Context.User.Id)
+            components: StepComponents(session, Context.User.Id),
+            ephemeral: true
         ).ConfigureAwait(false);
-        session.MessageId = msg.Id;
+        session.MessageId      = msg.Id;
+        session.BuilderMessage = msg;
+
+        PokeBuildPanelManager.MarkUsed(Context.User.Id);
     }
 
     // ── Species ───────────────────────────────────────────────────────────────
@@ -644,7 +666,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             Sessions[userId] = session;
             return;
         }
-        await DeferAsync(ephemeral: false).ConfigureAwait(false);
+        await DeferAsync(ephemeral: true).ConfigureAwait(false);
         await DeleteBuilderAsync(session).ConfigureAwait(false);
         await DispatchAsync(session).ConfigureAwait(false);
     }
@@ -690,6 +712,34 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         ).ConfigureAwait(false);
         PokeBuildPanelManager.Register(Context.Channel.Id, msg.Id);
         await FollowupAsync("✅ Builder panel posted!", ephemeral: true).ConfigureAwait(false);
+    }
+
+    [SlashCommand("pokebuild-cooldown", "Toggle a role's 10-minute builder cooldown (Admin only)")]
+    public async Task PokeBuildCooldownAsync(IRole role)
+    {
+        if (Context.Guild == null)
+        {
+            await RespondAsync("❌ Server only.", ephemeral: true).ConfigureAwait(false);
+            return;
+        }
+        var member = Context.User as SocketGuildUser;
+        if (member == null || (!member.GuildPermissions.ManageGuild && !member.GuildPermissions.Administrator))
+        {
+            await RespondAsync("❌ Requires **Manage Server** permission.", ephemeral: true).ConfigureAwait(false);
+            return;
+        }
+
+        var added = PokeBuildPanelManager.ToggleCooldownRole(role.Id);
+        var action = added ? "✅ Added" : "🗑️ Removed";
+        var prep   = added ? "to" : "from";
+
+        var ids      = PokeBuildPanelManager.GetCooldownRoleIds();
+        var roleList = ids.Count == 0 ? "*(none)*" : string.Join("\n", ids.Select(id => $"<@&{id}>"));
+
+        await RespondAsync(
+            $"{action} {role.Mention} {prep} the 10-minute cooldown list.\n\n" +
+            $"**Roles with cooldown:**\n{roleList}",
+            ephemeral: true).ConfigureAwait(false);
     }
 
     // ── Step router ───────────────────────────────────────────────────────────
@@ -1036,24 +1086,47 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
 
     private async Task UpdateAsync(PokemonBuilderState session, ulong userId)
     {
+        if (session.BuilderMessage is not null)
+        {
+            // RestFollowupMessage.ModifyAsync uses the webhook endpoint — works for ephemeral messages
+            try
+            {
+                await session.BuilderMessage.ModifyAsync(m =>
+                {
+                    m.Embed      = StepEmbed(session);
+                    m.Components = StepComponents(session, userId);
+                }).ConfigureAwait(false);
+                return;
+            }
+            catch { }
+        }
+        // Fallback: non-ephemeral channel message
         if (session.MessageId == 0) return;
         try
         {
             if (await Context.Channel.GetMessageAsync(session.MessageId).ConfigureAwait(false)
                 is IUserMessage msg)
-            {
                 await msg.ModifyAsync(m =>
                 {
                     m.Embed      = StepEmbed(session);
                     m.Components = StepComponents(session, userId);
                 }).ConfigureAwait(false);
-            }
         }
         catch { }
     }
 
     private async Task DeleteBuilderAsync(PokemonBuilderState session)
     {
+        if (session.BuilderMessage is not null)
+        {
+            // RestFollowupMessage.DeleteAsync uses the webhook endpoint — works for ephemeral messages
+            try
+            {
+                await session.BuilderMessage.DeleteAsync().ConfigureAwait(false);
+                return;
+            }
+            catch { }
+        }
         if (session.MessageId == 0) return;
         try
         {
