@@ -876,7 +876,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             .WithCustomId($"pb_level_{userId}")
             .WithPlaceholder($"📊 Level — currently {s.Level}");
         foreach (var lvl in legalLevels)
-            levelMenu.AddOption($"Level {lvl}", lvl.ToString(), isDefault: s.Level == lvl);
+            levelMenu.AddOption($"Level {lvl}", lvl.ToString());
 
         return new ComponentBuilder()
             .WithSelectMenu(levelMenu, row: 0)
@@ -912,8 +912,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             .WithCustomId($"pb_isel_{userId}")
             .WithPlaceholder("🎒 Select held item...");
         foreach (var item in slice)
-            menu.AddOption(item, item,
-                isDefault: item.Equals(s.Item, StringComparison.OrdinalIgnoreCase));
+            menu.AddOption(item, item);
 
         return new ComponentBuilder()
             .WithSelectMenu(menu, row: 0)
@@ -944,8 +943,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             .WithCustomId($"pb_nature_{userId}")
             .WithPlaceholder("🌿 Nature — pick one...");
         foreach (var (name, effect) in PokeBuildPanelManager.Natures)
-            natureMenu.AddOption(name, name, effect,
-                isDefault: name.Equals(s.Nature, StringComparison.OrdinalIgnoreCase));
+            natureMenu.AddOption(name, name, effect);
 
         return new ComponentBuilder()
             .WithSelectMenu(natureMenu, row: 0)
@@ -971,8 +969,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             .WithCustomId($"pb_ball_{userId}")
             .WithPlaceholder("⚾ Poké Ball — pick one...");
         foreach (var ball in PokeBuildPanelManager.GetBalls())
-            ballMenu.AddOption(ball, ball,
-                isDefault: ball.Equals(s.Ball, StringComparison.OrdinalIgnoreCase));
+            ballMenu.AddOption(ball, ball);
 
         return new ComponentBuilder()
             .WithSelectMenu(ballMenu, row: 0)
@@ -999,7 +996,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
             .WithCustomId($"pb_iv_{userId}")
             .WithPlaceholder("🏆 IV Spread...");
         foreach (var (label, desc, value) in IVPresets)
-            menu.AddOption(label, value, desc, isDefault: value == s.IVs);
+            menu.AddOption(label, value, desc);
 
         return new ComponentBuilder()
             .WithSelectMenu(menu, row: 0)
@@ -1027,10 +1024,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         foreach (var (label, desc, value) in EVPresets)
         {
             var optValue = value.Length == 0 ? "_none_" : value;
-            var isDefault = value.Length == 0
-                ? string.IsNullOrEmpty(s.EVs)
-                : value == s.EVs;
-            menu.AddOption(label, optValue, desc, isDefault: isDefault);
+            menu.AddOption(label, optValue, desc);
         }
 
         return new ComponentBuilder()
