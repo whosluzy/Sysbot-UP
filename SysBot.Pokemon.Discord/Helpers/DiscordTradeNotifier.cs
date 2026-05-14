@@ -77,8 +77,7 @@ public class DiscordTradeNotifier<T> : IPokeTradeNotifier<T>, IDisposable
 
         _isTradeActive = true;
 
-        // Create a new timer that checks if user is up next
-        // Only sends ONE notification when they're truly up next to avoid Discord spam
+        // Create a new timer that fires once when the user reaches position 1 to avoid Discord spam
         _periodicUpdateTimer = new Timer(async _ =>
         {
             if (!_isTradeActive)
@@ -86,55 +85,47 @@ public class DiscordTradeNotifier<T> : IPokeTradeNotifier<T>, IDisposable
 
             try
             {
-                // Check the current position using the unique trade ID
                 var position = Hub.Queues.Info.CheckPosition(_traderID, _uniqueTradeID, PokeRoutineType.LinkTrade);
                 if (!position.InQueue)
                     return;
 
                 var currentPosition = position.Position < 1 ? 1 : position.Position;
-
-                // Store the latest position for future reference
                 _lastReportedPosition = currentPosition;
 
-                var botct = Hub.Bots.Count;
-
-                // Only send ONE notification when the user is truly up next (position 1 or ready to be processed)
-                if (position.InQueue && position.Detail != null)
+                // Only notify once when the user reaches position 1
+                if (position.InQueue && position.Detail != null && currentPosition == 1 && _initialUpdateSent && !_almostUpNotificationSent)
                 {
-                    // Only notify when position is 1 (truly up next) and we haven't sent the notification yet
-                    if (currentPosition == 1 && _initialUpdateSent && !_almostUpNotificationSent)
-                    {
-                        // Send notification that they're up next - only sent ONCE
-                        _almostUpNotificationSent = true;
+                    _almostUpNotificationSent = true;
 
-                        var batchInfo = TotalBatchTrades > 1 ? $"\n\n**Important:** This is a batch trade with {TotalBatchTrades} Pokémon. Please stay in the trade until all are completed!" : "";
+                    var steps =
+                        "1. Make sure your game is **open and active**\n" +
+                        "2. Go to **Link Trade** in your game\n" +
+                        $"3. Enter your trade code: `{Code:0000 0000}`\n" +
+                        "4. Wait for the bot to appear and **accept the trade!**";
 
-                        var upNextEmbed = new EmbedBuilder
-                        {
-                            Color = Color.Gold,
-                            Title = "🎯 You're Up Next!",
-                            Description = $"Your trade will begin very soon. Please be ready!{batchInfo}",
-                            Footer = new EmbedFooterBuilder
-                            {
-                                Text = "Get ready to connect!"
-                            },
-                            Timestamp = DateTimeOffset.Now
-                        }.Build();
+                    if (TotalBatchTrades > 1)
+                        steps += $"\n\n⚠️ **Batch Reminder:** Stay in the trade for all {TotalBatchTrades} Pokémon!";
 
-                        await Trader.SendMessageAsync(embed: upNextEmbed).ConfigureAwait(false);
-                    }
-                    // No other periodic updates - this prevents Discord spam
+                    var upNextEmbed = new EmbedBuilder()
+                        .WithColor(Color.Gold)
+                        .WithTitle("You're Up Next!")
+                        .WithDescription("Your trade is about to begin! Here's what to do:")
+                        .AddField("Steps to Connect", steps, false)
+                        .AddField("Trade Code", $"`{Code:0000 0000}`", true)
+                        .WithFooter("The bot will start your trade very soon!")
+                        .WithTimestamp(DateTimeOffset.Now)
+                        .Build();
+
+                    await Trader.SendMessageAsync(embed: upNextEmbed).ConfigureAwait(false);
                 }
             }
             catch (ObjectDisposedException)
             {
-                // Discord client was disposed, stop periodic updates
                 Base.LogUtil.LogError("Discord client disposed during periodic update. Stopping updates.", "StartPeriodicUpdates");
                 StopPeriodicUpdates();
             }
             catch (Exception ex)
             {
-                // Log any other errors but don't crash
                 Base.LogUtil.LogError($"Unexpected error in periodic trade update: {ex.Message}", "StartPeriodicUpdates");
             }
         },
@@ -158,26 +149,33 @@ public class DiscordTradeNotifier<T> : IPokeTradeNotifier<T>, IDisposable
             var currentPosition = position.Position < 1 ? 1 : position.Position;
             var botct = Hub.Bots.Count;
             var currentETA = currentPosition > botct ? Hub.Config.Queues.EstimateDelay(currentPosition, botct) : 0;
+            var etaText = currentETA > 0 ? $"~{currentETA} minutes" : "Less than a minute";
 
             _lastReportedPosition = currentPosition;
 
-            var batchDescription = TotalBatchTrades > 1
-                ? $"Your batch trade request ({TotalBatchTrades} Pokémon) has been queued.\n\n⚠️ **Important Instructions:**\n• Stay in the trade for all {TotalBatchTrades} trades\n• Have all {TotalBatchTrades} Pokémon ready to trade\n• Do not exit until you see the completion message\n\n**Queue Position**: {currentPosition}"
-                : $"Your trade request has been queued.\n**Queue Position**: {currentPosition}";
+            var embedBuilder = new EmbedBuilder()
+                .WithColor(Color.Green)
+                .WithTitle(TotalBatchTrades > 1 ? "Batch Trade Queued!" : "Trade Queued!")
+                .WithDescription(TotalBatchTrades > 1
+                    ? $"Your batch trade with **{TotalBatchTrades} Pokémon** has been added to the queue!"
+                    : "Your trade request has been added to the queue!")
+                .AddField("Queue Position", $"**#{currentPosition}**", true)
+                .AddField("Estimated Wait", etaText, true)
+                .WithTimestamp(DateTimeOffset.Now);
 
-            var initialEmbed = new EmbedBuilder
+            if (TotalBatchTrades > 1)
             {
-                Color = Color.Green,
-                Title = TotalBatchTrades > 1 ? "🎁 Batch Trade Request Queued" : "Trade Request Queued",
-                Description = batchDescription,
-                Footer = new EmbedFooterBuilder
-                {
-                    Text = $"Estimated wait time: {(currentETA > 0 ? $"{currentETA} minutes" : "Less than a minute")}"
-                },
-                Timestamp = DateTimeOffset.Now
-            }.Build();
+                embedBuilder.AddField("Batch Info",
+                    $"You're trading **{TotalBatchTrades} Pokémon** in this session.\n" +
+                    $"⚠️ **Important:** Stay in the trade until all {TotalBatchTrades} trades are complete — do not exit early!", false);
+            }
 
-            await Trader.SendMessageAsync(embed: initialEmbed).ConfigureAwait(false);
+            embedBuilder
+                .AddField("While You Wait",
+                    "Make sure your game is open and ready. Enter **Link Trade** and set your code when prompted. You'll get a DM when your turn is coming up!", false)
+                .WithFooter("You'll be notified as your trade progresses.");
+
+            await Trader.SendMessageAsync(embed: embedBuilder.Build()).ConfigureAwait(false);
 
             _initialUpdateSent = true;
 
@@ -300,30 +298,25 @@ public class DiscordTradeNotifier<T> : IPokeTradeNotifier<T>, IDisposable
 
         var tradedToUser = Data.Species;
 
-        // Create different messages based on whether this is a single trade or part of a batch
-        string message;
         if (TotalBatchTrades > 1)
         {
             if (BatchTradeNumber == TotalBatchTrades)
             {
-                // Final trade in the batch - this is now called only once at the very end
-                message = $"✅ **All {TotalBatchTrades} trades completed successfully!** Thank you for trading!";
+                // Final trade in the batch — show full completion embed
+                EmbedHelper.SendTradeFinishedEmbedAsync(Trader, $"All {TotalBatchTrades} trades completed! Thank you for trading!", Data, IsMysteryEgg).ConfigureAwait(false);
             }
             else
             {
-                // Mid-batch trade
-                var speciesName = IsMysteryEgg ? "Mystery Egg" : SpeciesName.GetSpeciesName(Data.Species, 2);
-                message = $"✅ Trade {BatchTradeNumber}/{TotalBatchTrades} completed! ({speciesName})\n" +
-                         $"Preparing trade {BatchTradeNumber + 1}/{TotalBatchTrades}...";
+                // Mid-batch — show progress embed with stay-in-trade reminder
+                EmbedHelper.SendBatchProgressEmbedAsync(Trader, BatchTradeNumber, TotalBatchTrades, Data, IsMysteryEgg).ConfigureAwait(false);
             }
         }
         else
         {
-            // Standard single trade message
-            message = tradedToUser != 0 ? $"Trade finished. Enjoy!" : "Trade finished!";
+            // Standard single trade
+            var message = tradedToUser != 0 ? "Enjoy your new Pokémon!" : "Trade finished!";
+            EmbedHelper.SendTradeFinishedEmbedAsync(Trader, message, Data, IsMysteryEgg).ConfigureAwait(false);
         }
-
-        Trader.SendMessageAsync(message).ConfigureAwait(false);
 
         // For single trades only, return the Pokemon immediately
         // Batch trades will have their Pokemon returned separately via SendNotification

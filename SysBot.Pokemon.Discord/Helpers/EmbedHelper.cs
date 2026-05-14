@@ -82,11 +82,13 @@ public static class EmbedHelper
             }
 
             var embed = new EmbedBuilder()
-                .WithTitle("Notice...")
+                .WithTitle("Notice")
                 .WithDescription(message)
+                .AddField("Need Help?", "If you have questions or concerns, please contact a moderator.", false)
+                .WithFooter("FusionBot Notification")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-legalityerror.gif")
-                .WithColor(Color.Red)
+                .WithColor(Color.Orange)
                 .Build();
 
             await dm.SendMessageAsync(embed: embed).ConfigureAwait(false);
@@ -124,8 +126,11 @@ public static class EmbedHelper
             }
 
             var embed = new EmbedBuilder()
-                .WithTitle("Trade Canceled...")
-                .WithDescription($"Your trade was canceled.\n**Reason**: {reason}")
+                .WithTitle("Trade Canceled")
+                .WithDescription("Unfortunately, your trade was unable to be completed.")
+                .AddField("Reason", reason, false)
+                .AddField("What Now?", "You can try submitting the trade command again. If the issue keeps happening, please contact a moderator.", false)
+                .WithFooter("Sorry for the inconvenience!")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-uhoherror.gif")
                 .WithColor(Color.Red)
@@ -166,8 +171,13 @@ public static class EmbedHelper
             }
 
             var embed = new EmbedBuilder()
-                .WithTitle("Here's your Link Trade Code!")
-                .WithDescription($"# {code:0000 0000}\n*I'll notify you when your trade starts!*")
+                .WithTitle("Your Link Trade Code")
+                .WithDescription($"Use this code to connect with the bot in your game!\n# {code:0000 0000}")
+                .AddField("How to Connect",
+                    "1. Open your game and go to **Link Trade**\n" +
+                    "2. Select **Set Link Code** and enter the code above\n" +
+                    "3. The bot will search for and find you automatically!", false)
+                .WithFooter("You'll receive another DM when your trade is about to begin.")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-tradecode.gif")
                 .WithColor(Color.Gold)
@@ -201,25 +211,40 @@ public static class EmbedHelper
         try
         {
             string thumbnailUrl;
+            string speciesName;
 
             if (isMysteryEgg)
             {
                 thumbnailUrl = "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/mysteryegg3.png";
+                speciesName = "Mystery Egg";
             }
             else
             {
                 thumbnailUrl = TradeExtensions<T>.PokeImg(pk, false, true, null);
+                speciesName = SpeciesName.GetSpeciesName(pk.Species, 2);
             }
 
-            var embed = new EmbedBuilder()
-                .WithTitle("Trade Completed!")
+            var embedBuilder = new EmbedBuilder()
+                .WithTitle("Trade Complete!")
                 .WithDescription(message)
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl(thumbnailUrl)
-                .WithColor(Color.Teal)
-                .Build();
+                .WithColor(Color.Teal);
 
-            await user.SendMessageAsync(embed: embed).ConfigureAwait(false);
+            if (!isMysteryEgg && pk.Species != 0)
+            {
+                var shinyTag = pk.IsShiny ? " ✨" : "";
+                embedBuilder.AddField("Pokémon Received", $"**{speciesName}{shinyTag}** — Level {pk.Level}", true);
+
+                if (!string.IsNullOrEmpty(pk.Nickname) && pk.Nickname != speciesName)
+                    embedBuilder.AddField("Nickname", pk.Nickname, true);
+            }
+
+            embedBuilder
+                .AddField("Thank You!", "Hope you enjoy your new Pokémon! Feel free to use the trade command again anytime.", false)
+                .WithFooter("Thanks for using the bot!");
+
+            await user.SendMessageAsync(embed: embedBuilder.Build()).ConfigureAwait(false);
         }
         catch (ObjectDisposedException)
         {
@@ -228,6 +253,42 @@ public static class EmbedHelper
         catch (Exception ex)
         {
             LogUtil.LogError($"Error sending trade finished embed: {ex.Message}", "SendTradeFinishedEmbedAsync");
+        }
+    }
+
+    public static async Task SendBatchProgressEmbedAsync<T>(IUser user, int currentTrade, int totalTrades, T pk, bool isMysteryEgg)
+        where T : PKM, new()
+    {
+        try
+        {
+            var speciesName = isMysteryEgg ? "Mystery Egg" : SpeciesName.GetSpeciesName(pk.Species, 2);
+            var thumbnailUrl = isMysteryEgg
+                ? "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/mysteryegg3.png"
+                : TradeExtensions<T>.PokeImg(pk, false, true, null);
+
+            var remaining = totalTrades - currentTrade;
+
+            var embed = new EmbedBuilder()
+                .WithTitle($"Trade {currentTrade}/{totalTrades} Complete!")
+                .WithDescription($"**{speciesName}** was traded successfully!")
+                .AddField("Batch Progress", $"{currentTrade} of {totalTrades} trades done.", true)
+                .AddField("Up Next", $"Preparing trade {currentTrade + 1}/{totalTrades}...", true)
+                .AddField("⚠️ Stay in the Trade!", "The next Pokémon will be sent automatically — **do not exit the trade!**", false)
+                .WithFooter($"{remaining} trade{(remaining == 1 ? "" : "s")} remaining in this batch.")
+                .WithTimestamp(DateTimeOffset.Now)
+                .WithThumbnailUrl(thumbnailUrl)
+                .WithColor(Color.Blue)
+                .Build();
+
+            await user.SendMessageAsync(embed: embed).ConfigureAwait(false);
+        }
+        catch (ObjectDisposedException)
+        {
+            LogUtil.LogError("Discord client disposed when sending batch progress embed.", "SendBatchProgressEmbedAsync");
+        }
+        catch (Exception ex)
+        {
+            LogUtil.LogError($"Error sending batch progress embed: {ex.Message}", "SendBatchProgressEmbedAsync");
         }
     }
 
@@ -244,24 +305,26 @@ public static class EmbedHelper
             }
 
             if (isMysteryEgg)
-            {
-                speciesName = "**Mystery Egg**";
-            }
+                speciesName = "Mystery Egg";
 
             var embed = new EmbedBuilder()
-                .WithTitle("Loading the Trade Menu...")
-                .WithDescription($"**Pokemon**: {speciesName}\n**Trade Code**: {code:0000 0000}")
+                .WithTitle("Opening the Trade Menu...")
+                .WithDescription("Almost there! The bot is loading up the trade interface.")
+                .AddField("Pokémon", speciesName, true)
+                .AddField("Trade Code", $"`{code:0000 0000}`", true)
+                .AddField("What to Do",
+                    "Head to **Link Trade** in your game and enter your trade code if you haven't already!", false);
+
+            if (!string.IsNullOrEmpty(message))
+                embed.AddField("Additional Info", message, false);
+
+            embed
+                .WithFooter("The bot will begin searching for you shortly...")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-initializingbot.gif")
                 .WithColor(Color.Green);
 
-            if (!string.IsNullOrEmpty(message))
-            {
-                embed.WithDescription($"{embed.Description}\n\n{message}");
-            }
-
-            var builtEmbed = embed.Build();
-            await dm.SendMessageAsync(embed: builtEmbed).ConfigureAwait(false);
+            await dm.SendMessageAsync(embed: embed.Build()).ConfigureAwait(false);
             _lastDmTime = DateTime.Now;
         }
         catch (ObjectDisposedException)
@@ -295,20 +358,29 @@ public static class EmbedHelper
                 return;
             }
 
+            var displayTrainer = string.IsNullOrWhiteSpace(trainerName) ? "Unknown" : trainerName.Trim();
+
             var embed = new EmbedBuilder()
-                .WithTitle($"Now Searching...")
-                .WithDescription($"**Waiting For**: {trainerName}\n**My IGN**: {inGameName}\n\n**Insert your Trade Code!**")
+                .WithTitle("Searching For You...")
+                .WithDescription("The bot is in the Link Trade lobby and waiting for you to connect!")
+                .AddField("Bot's In-Game Name", $"**{inGameName}**", true)
+                .AddField("Your Trainer", displayTrainer, true)
+                .AddField("How to Connect",
+                    "1. Open **Link Trade** in your game\n" +
+                    "2. Enter your trade code to search\n" +
+                    $"3. Find and select **{inGameName}** when they appear\n" +
+                    "4. Choose your Pokémon and **confirm the trade!**", false);
+
+            if (!string.IsNullOrEmpty(message))
+                embed.AddField("Batch Info", message, false);
+
+            embed
+                .WithFooter("Accept the trade when the bot finds you!")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-nowsearching.gif")
                 .WithColor(Color.DarkGreen);
 
-            if (!string.IsNullOrEmpty(message))
-            {
-                embed.WithDescription($"{embed.Description}\n\n{message}");
-            }
-
-            var builtEmbed = embed.Build();
-            await dm.SendMessageAsync(embed: builtEmbed).ConfigureAwait(false);
+            await dm.SendMessageAsync(embed: embed.Build()).ConfigureAwait(false);
             _lastDmTime = DateTime.Now;
         }
         catch (ObjectDisposedException)
