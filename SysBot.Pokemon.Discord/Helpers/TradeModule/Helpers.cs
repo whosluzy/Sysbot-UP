@@ -168,7 +168,7 @@ public static class Helpers<T> where T : PKM, new()
         {
             return Task.FromResult(new ProcessedPokemonResult<T>
             {
-                Error = "Unable to parse Showdown set. Could not identify the Pokémon species.",
+                Error = "Please try again, something about your format is wrong. Check spelling or if level/customizations are legally possible to exist in game also.",
                 ShowdownSet = set
             });
         }
@@ -199,7 +199,7 @@ public static class Helpers<T> where T : PKM, new()
         {
             return Task.FromResult(new ProcessedPokemonResult<T>
             {
-                Error = $"Unable to parse Showdown Set:\n{string.Join("\n", actualInvalidLines.Select(l => l.Value))}",
+                Error = $"Please try again, something about your format is wrong. Check spelling or if level/customizations are legally possible to exist in game also.",
                 ShowdownSet = set
             });
         }
