@@ -54,13 +54,15 @@ internal static class BuilderData
             "plza" => PersonalTable.ZA,
             "swsh" => PersonalTable.SWSH,
             "bdsp" => PersonalTable.BDSP,
+            "lgpe" => PersonalTable.GG,
             _      => PersonalTable.SV,
         };
         var ctx     = GameContext(gameType);
         var strings = GameInfo.GetStrings("en");
         var list    = new List<(string Display, string Value)>();
+        var maxSp   = table.MaxSpeciesID;
 
-        for (ushort sp = 1; sp < (ushort)Species.MAX_COUNT; sp++)
+        for (ushort sp = 1; sp <= maxSp; sp++)
         {
             var name = ((Species)sp).ToString();
             if (name is "None" or "Egg") continue;
@@ -242,6 +244,7 @@ internal static class BuilderData
         "la"   => EntityContext.Gen8a,
         "swsh" => EntityContext.Gen8,
         "bdsp" => EntityContext.Gen8b,
+        "lgpe" => EntityContext.Gen7b,
         _      => EntityContext.Gen9,
     };
 }
