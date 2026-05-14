@@ -5,9 +5,11 @@ using PKHeX.Core;
 using SysBot.Pokemon.Discord.Commands.Bots.Autocomplete;
 using SysBot.Pokemon.Helpers;
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 
 namespace SysBot.Pokemon.Discord.Commands.Bots.SlashCommands;
@@ -161,6 +163,105 @@ internal static class BuilderData
         "bdsp"         => EntityContext.Gen8b,
         _              => EntityContext.Gen9,
     };
+
+    // ── Legal Levels (per species, cached) ───────────────────────────────────
+
+    private static readonly ConcurrentDictionary<(string Game, ushort Species, byte Form), IReadOnlyList<int>>
+        LevelCache = new();
+
+    public static IReadOnlyList<int> GetLegalLevels(string gameType, ushort species, byte form)
+        => LevelCache.GetOrAdd((gameType, species, form), k => BuildLegalLevels(k.Game, k.Species, k.Form));
+
+    private static IReadOnlyList<int> BuildLegalLevels(string gameType, ushort species, byte form)
+    {
+        var min = GetMinLevel(gameType, species, form);
+        // Always include the exact minimum, then multiples of 5 up to 100
+        return Enumerable.Range(min, 101 - min)
+            .Where(l => l == min || l % 5 == 0)
+            .ToList();
+    }
+
+    private static int GetMinLevel(string gameType, ushort species, byte form)
+    {
+        IPersonalTable table = gameType switch
+        {
+            "la"   => PersonalTable.LA,
+            "plza" => PersonalTable.ZA,
+            "swsh" => PersonalTable.SWSH,
+            "bdsp" => PersonalTable.BDSP,
+            _      => PersonalTable.SV,
+        };
+        var info = table[species];
+        // EggGroup1 == 15 = Undiscovered; anything else means the species can hatch from an egg → level 1 is legal
+        var eg1Prop = info.GetType().GetProperty("EggGroup1",
+            BindingFlags.Public | BindingFlags.Instance);
+        if (eg1Prop?.GetValue(info) is int eg1 && eg1 != 15)
+            return 1;
+
+        // Undiscovered (legendary/mythical) — scan wild encounter slots for real minimum
+        return GetMinEncounterLevel(gameType, species, form);
+    }
+
+    private static int GetMinEncounterLevel(string gameType, ushort species, byte form)
+    {
+        // Class names for each game's encounter database
+        var encClassName = gameType switch
+        {
+            "la"   => "PKHeX.Core.Encounters8a",
+            "swsh" => "PKHeX.Core.Encounters8",
+            "bdsp" => "PKHeX.Core.Encounters8b",
+            _      => "PKHeX.Core.Encounters9",   // sv and plza both use Gen9 class
+        };
+
+        try
+        {
+            var assembly = typeof(PersonalTable).Assembly;
+            var encType  = assembly.GetType(encClassName);
+            if (encType == null) return 1;
+
+            // "Slots" is typically internal static — use NonPublic to reach it
+            var slotsField = encType.GetField("Slots",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (slotsField == null) return 1;
+
+            if (slotsField.GetValue(null) is not IEnumerable areas) return 1;
+
+            var instFlags = BindingFlags.Public | BindingFlags.Instance;
+            int minLevel  = int.MaxValue;
+
+            foreach (var area in areas)
+            {
+                if (area.GetType().GetProperty("Slots", instFlags)?.GetValue(area)
+                    is not IEnumerable slots)
+                    continue;
+
+                foreach (var slot in slots)
+                {
+                    var t = slot.GetType();
+
+                    // Match species
+                    var rawSp = t.GetProperty("Species", instFlags)?.GetValue(slot);
+                    var slotSp = rawSp switch { ushort u => u, int i => (ushort)i, _ => (ushort)0 };
+                    if (slotSp != species) continue;
+
+                    // Match form (form 0 slots are valid for any form request)
+                    var rawForm = t.GetProperty("Form", instFlags)?.GetValue(slot);
+                    var slotForm = rawForm switch { byte b => b, int i => (byte)i, _ => (byte)0 };
+                    if (slotForm != 0 && slotForm != form) continue;
+
+                    var rawMin = t.GetProperty("LevelMin", instFlags)?.GetValue(slot);
+                    var lmin   = rawMin switch { byte b => (int)b, int i => i, _ => 1 };
+                    if (lmin < minLevel) minLevel = lmin;
+                }
+            }
+
+            return minLevel == int.MaxValue ? 1 : minLevel;
+        }
+        catch
+        {
+            return 1;
+        }
+    }
 }
 
 // ─── Session state ─────────────────────────────────────────────────────────────
@@ -197,12 +298,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         "Fighting","Poison","Ground","Flying","Psychic","Bug",
         "Rock","Ghost","Dragon","Dark","Steel","Fairy","Stellar",
     ];
-
-    private static readonly (string Label, string Val)[] Levels =
-        Enumerable.Range(1, 100)
-            .Where(l => l == 1 || l % 5 == 0)
-            .Select(l => ($"Level {l}", l.ToString()))
-            .ToArray();
 
     private enum PickerMode { Builder, Species, Item, Move }
 
@@ -265,6 +360,15 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         var parts = value.Split('|');
         session.Species        = value;
         session.SpeciesDisplay = parts.ElementAtOrDefault(2) ?? parts.ElementAtOrDefault(0) ?? value;
+
+        // Clamp level to what's legal for this species
+        var (sp, form) = ParseSpeciesForm(value);
+        if (sp > 0)
+        {
+            var legal = BuilderData.GetLegalLevels(session.GameType, sp, form);
+            if (legal.Count > 0 && !legal.Contains(session.Level))
+                session.Level = legal[0]; // snap to minimum legal level
+        }
 
         await DeferAsync().ConfigureAwait(false);
         await UpdateAsync(session, userId, PickerMode.Builder).ConfigureAwait(false);
@@ -639,12 +743,18 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
     {
         var cb = new ComponentBuilder();
 
-        // Row 0 — Level
+        // Row 0 — Level (filtered to legal range for this species)
+        var (sp, spForm) = ParseSpeciesForm(s.Species);
+        var legalLevels  = sp > 0
+            ? BuilderData.GetLegalLevels(s.GameType, sp, spForm)
+            : (IReadOnlyList<int>)Enumerable.Range(1, 100)
+                .Where(l => l == 1 || l % 5 == 0).ToList();
+
         var levelMenu = new SelectMenuBuilder()
             .WithCustomId($"pb_level_{userId}")
             .WithPlaceholder($"📊 Level — currently {s.Level}");
-        foreach (var (label, val) in Levels)
-            levelMenu.AddOption(label, val, isDefault: s.Level.ToString() == val);
+        foreach (var lvl in legalLevels)
+            levelMenu.AddOption($"Level {lvl}", lvl.ToString(), isDefault: s.Level == lvl);
         cb.WithSelectMenu(levelMenu, row: 0);
 
         // Row 1 — Nature
