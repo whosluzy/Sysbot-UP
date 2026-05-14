@@ -11,28 +11,120 @@ using System.Threading.Tasks;
 
 namespace SysBot.Pokemon.Discord;
 
-/// <summary>
-/// Keeps the Pokémon builder panel at the bottom of its channel.
-/// Whenever any message appears in a tracked channel the old panel is
-/// deleted and a fresh one is posted as the newest message.
-/// </summary>
 public static class PokeBuildPanelManager
 {
-    private static readonly string FilePath = "pokebuild_panels.json";
+    private static readonly string FilePath =
+        Path.Combine(AppContext.BaseDirectory, "pokebuild_panels.json");
 
     // channelId → current panel messageId
     private static readonly ConcurrentDictionary<ulong, ulong> Panels = new();
-    // per-channel timestamp of last repost (rate-limit guard)
     private static readonly ConcurrentDictionary<ulong, DateTime> LastRepost = new();
+    private const int CooldownSeconds = 12;
 
-    private const int CooldownSeconds = 10;
+    // ─── Game detection ───────────────────────────────────────────────────────
 
-    private static readonly string[] TeraTypes =
+    public static string CurrentGameType { get; private set; } = "sv";
+
+    public static void SetGameType(Type pkType)
+    {
+        CurrentGameType = pkType.Name switch
+        {
+            "PK9" => "sv",
+            "PA8" => "la",
+            "PA9" => "plza",
+            "PK8" => "swsh",
+            "PB8" => "bdsp",
+            "PB7" => "lgpe",
+            _     => "sv",
+        };
+    }
+
+    public static string GetGameLabel() => CurrentGameType switch
+    {
+        "sv"   => "Scarlet / Violet 🟣",
+        "la"   => "Legends: Arceus 🏔️",
+        "plza" => "Legends: Z-A 🗼",
+        "swsh" => "Sword / Shield ⚔️",
+        "bdsp" => "BDSP 💎",
+        "lgpe" => "Let's Go 🎮",
+        _      => "Unknown",
+    };
+
+    // ─── Nature data ──────────────────────────────────────────────────────────
+
+    public static readonly (string Name, string Effect)[] Natures =
     [
-        "Normal", "Fire", "Water", "Electric", "Grass", "Ice",
-        "Fighting", "Poison", "Ground", "Flying", "Psychic", "Bug",
-        "Rock", "Ghost", "Dragon", "Dark", "Steel", "Fairy", "Stellar",
+        ("Hardy",   "Neutral"),
+        ("Lonely",  "+Atk / -Def"),
+        ("Brave",   "+Atk / -Spe"),
+        ("Adamant", "+Atk / -SpA"),
+        ("Naughty", "+Atk / -SpD"),
+        ("Bold",    "+Def / -Atk"),
+        ("Docile",  "Neutral"),
+        ("Relaxed", "+Def / -Spe"),
+        ("Impish",  "+Def / -SpA"),
+        ("Lax",     "+Def / -SpD"),
+        ("Timid",   "+Spe / -Atk"),
+        ("Hasty",   "+Spe / -Def"),
+        ("Serious", "Neutral"),
+        ("Jolly",   "+Spe / -SpA"),
+        ("Naive",   "+Spe / -SpD"),
+        ("Modest",  "+SpA / -Atk"),
+        ("Mild",    "+SpA / -Def"),
+        ("Quiet",   "+SpA / -Spe"),
+        ("Bashful", "Neutral"),
+        ("Rash",    "+SpA / -SpD"),
+        ("Calm",    "+SpD / -Atk"),
+        ("Gentle",  "+SpD / -Def"),
+        ("Sassy",   "+SpD / -Spe"),
+        ("Careful", "+SpD / -SpA"),
+        ("Quirky",  "Neutral"),
     ];
+
+    // ─── Ball data per game ───────────────────────────────────────────────────
+
+    private static readonly string[] BallsSV =
+    [
+        "Poké Ball", "Great Ball", "Ultra Ball", "Master Ball",
+        "Net Ball", "Dive Ball", "Nest Ball", "Repeat Ball", "Timer Ball",
+        "Luxury Ball", "Premier Ball", "Dusk Ball", "Heal Ball", "Quick Ball",
+        "Level Ball", "Lure Ball", "Moon Ball", "Friend Ball", "Love Ball",
+        "Heavy Ball", "Fast Ball", "Safari Ball", "Sport Ball",
+        "Beast Ball", "Dream Ball",
+    ];
+
+    private static readonly string[] BallsLA =
+    [
+        "Poké Ball", "Great Ball", "Ultra Ball",
+        "Leaden Ball", "Gigaton Ball", "Heavy Ball",
+        "Feather Ball", "Wing Ball", "Jet Ball",
+    ];
+
+    private static readonly string[] BallsSWSH =
+    [
+        "Poké Ball", "Great Ball", "Ultra Ball", "Master Ball",
+        "Net Ball", "Dive Ball", "Nest Ball", "Repeat Ball", "Timer Ball",
+        "Luxury Ball", "Premier Ball", "Dusk Ball", "Heal Ball", "Quick Ball",
+        "Level Ball", "Lure Ball", "Moon Ball", "Friend Ball", "Love Ball",
+        "Heavy Ball", "Fast Ball", "Safari Ball", "Sport Ball",
+        "Beast Ball", "Dream Ball",
+    ];
+
+    private static readonly string[] BallsBDSP =
+    [
+        "Poké Ball", "Great Ball", "Ultra Ball", "Master Ball",
+        "Net Ball", "Dive Ball", "Nest Ball", "Repeat Ball", "Timer Ball",
+        "Luxury Ball", "Premier Ball", "Dusk Ball", "Heal Ball", "Quick Ball",
+        "Safari Ball", "Sport Ball",
+    ];
+
+    public static string[] GetBalls() => CurrentGameType switch
+    {
+        "la"   => BallsLA,
+        "swsh" => BallsSWSH,
+        "bdsp" => BallsBDSP,
+        _      => BallsSV,
+    };
 
     // ─── Persistence ──────────────────────────────────────────────────────────
 
@@ -45,8 +137,8 @@ public static class PokeBuildPanelManager
             var dict = JsonSerializer.Deserialize<Dictionary<string, ulong>>(json);
             if (dict == null) return;
             foreach (var (k, v) in dict)
-                if (ulong.TryParse(k, out var channelId))
-                    Panels[channelId] = v;
+                if (ulong.TryParse(k, out var id))
+                    Panels[id] = v;
         }
         catch { }
     }
@@ -61,7 +153,7 @@ public static class PokeBuildPanelManager
         catch { }
     }
 
-    // ─── Registration (called by /pokebuild-setup) ────────────────────────────
+    // ─── Registration ─────────────────────────────────────────────────────────
 
     public static void Register(ulong channelId, ulong messageId)
     {
@@ -81,10 +173,12 @@ public static class PokeBuildPanelManager
                     ?? await client.Rest.GetChannelAsync(channelId) as ITextChannel;
                 if (channel == null) continue;
 
-                // Delete old panel (may already be gone — that's fine)
                 try { await channel.DeleteMessageAsync(Panels[channelId]); } catch { }
 
-                var msg = await channel.SendMessageAsync(embed: CreatePanelEmbed(), components: CreatePanelComponents());
+                var msg = await channel.SendMessageAsync(
+                    embed: CreatePanelEmbed(),
+                    components: CreatePanelComponents()
+                );
                 Panels[channelId] = msg.Id;
             }
             catch { }
@@ -92,65 +186,69 @@ public static class PokeBuildPanelManager
         Save();
     }
 
-    // ─── Sticky behaviour (called from SysCord.HandleMessageAsync) ────────────
+    // ─── Sticky (called from SysCord.HandleMessageAsync) ─────────────────────
 
     public static async Task OnMessageReceivedAsync(SocketMessage message)
     {
-        // Ignore system messages (e.g. "pinned a message" notices) to avoid loops
+        // Skip system messages (e.g. "pinned a message" notice) to avoid loops
         if (message.Type != MessageType.Default && message.Type != MessageType.Reply)
             return;
 
         if (!Panels.TryGetValue(message.Channel.Id, out var panelMsgId))
             return;
 
-        // Don't react to the panel message being reposted
+        // Don't react to the panel being freshly posted
         if (message.Id == panelMsgId)
             return;
 
-        // Per-channel cooldown so a burst of messages doesn't spam Discord
-        if (LastRepost.TryGetValue(message.Channel.Id, out var last)
-            && (DateTime.UtcNow - last).TotalSeconds < CooldownSeconds)
+        // Per-channel cooldown
+        if (LastRepost.TryGetValue(message.Channel.Id, out var last) &&
+            (DateTime.UtcNow - last).TotalSeconds < CooldownSeconds)
             return;
 
         LastRepost[message.Channel.Id] = DateTime.UtcNow;
 
         try { await message.Channel.DeleteMessageAsync(panelMsgId); } catch { }
 
-        if (message.Channel is not ITextChannel textChannel)
-            return;
+        if (message.Channel is not ITextChannel textChannel) return;
 
-        var newMsg = await textChannel.SendMessageAsync(embed: CreatePanelEmbed(), components: CreatePanelComponents());
+        var newMsg = await textChannel.SendMessageAsync(
+            embed: CreatePanelEmbed(),
+            components: CreatePanelComponents()
+        );
         Panels[message.Channel.Id] = newMsg.Id;
         Save();
     }
 
-    // ─── Embed & components ───────────────────────────────────────────────────
+    // ─── Panel embed & components ─────────────────────────────────────────────
 
     public static Embed CreatePanelEmbed()
     {
+        var extras = CurrentGameType switch
+        {
+            "sv"           => "Tera Type 🧬",
+            "la" or "plza" => "Alpha ⭐",
+            _              => "",
+        };
+        var featuresField = "Species • Level • Nature • Shiny ✨\nIVs & EVs • Held Item • Poké Ball • Moves ⚔️"
+            + (string.IsNullOrEmpty(extras) ? "" : $"\n{extras}");
+
         return new EmbedBuilder()
             .WithTitle("🔨 Pokémon Builder")
             .WithColor(Color.Gold)
             .WithDescription(
-                "Want a Pokémon? **Click the button for your game below!**\n\n" +
-                "You'll be guided step-by-step — no commands needed. " +
-                "Fill in the name, level, IVs, moves, and more, then hit **✅ Submit Trade** to join the queue!\n​")
-            .AddField("🐾 What you can set",
-                "Species • Level • Nature • Shiny ✨\n" +
-                "IVs & EVs • Held Item • Poké Ball • Moves ⚔️\n" +
-                "Tera Type 🧬 (SV) • Alpha ⭐ (LA / PLZA)", inline: false)
-            .WithFooter($"PokedexMasterBot {TradeBot.Version} • Tap a button to start building!")
+                $"**Game: {GetGameLabel()}**\n\n" +
+                "Click **Build a Pokémon** below!\n" +
+                "Pick your options from the dropdowns — no typing required.\n​")
+            .AddField("🐾 What you can set", featuresField)
+            .WithFooter($"PokedexMasterBot {TradeBot.Version} • Tap the button to start!")
             .Build();
     }
 
     public static MessageComponent CreatePanelComponents()
     {
         return new ComponentBuilder()
-            .WithButton("🟣 Scarlet / Violet",  "pb_start_sv",   ButtonStyle.Primary,   row: 0)
-            .WithButton("🏔️ Legends: Arceus",   "pb_start_la",   ButtonStyle.Primary,   row: 0)
-            .WithButton("🗼 Legends: Z-A",       "pb_start_plza", ButtonStyle.Primary,   row: 0)
-            .WithButton("⚔️ Sword / Shield",     "pb_start_swsh", ButtonStyle.Secondary, row: 1)
-            .WithButton("💎 BDSP",               "pb_start_bdsp", ButtonStyle.Secondary, row: 1)
+            .WithButton("🔨  Build a Pokémon", "pb_start", ButtonStyle.Success)
             .Build();
     }
 }

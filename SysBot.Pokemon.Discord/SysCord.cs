@@ -474,8 +474,9 @@ public sealed partial class SysCord<T> : IDisposable where T : PKM, new()
                 await _commands.RemoveModuleAsync(module).ConfigureAwait(false);
         }
 
-        // Load sticky panel config
+        // Load sticky panel config and detect game from bot's PKM type
         PokeBuildPanelManager.Load();
+        PokeBuildPanelManager.SetGameType(typeof(T));
 
         // Initialize Slash Commands (Interaction Modules)
         await _interactions.AddModulesAsync(assembly, _services).ConfigureAwait(false);

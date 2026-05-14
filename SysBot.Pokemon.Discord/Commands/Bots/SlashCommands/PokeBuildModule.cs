@@ -2,12 +2,12 @@ using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
 using PKHeX.Core;
+using SysBot.Pokemon.Discord;
 using SysBot.Pokemon.Helpers;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading.Tasks;
-using SysBot.Pokemon.Discord;
 
 namespace SysBot.Pokemon.Discord.Commands.Bots.SlashCommands;
 
@@ -30,6 +30,8 @@ public class PokemonBuilderState
 }
 
 // ─── Modals ───────────────────────────────────────────────────────────────────
+
+// Only species + level — everything else is a dropdown or toggle in the builder
 public class PokeBuildBasicModal : IModal
 {
     public string Title => "🔨 Build Your Pokémon";
@@ -43,16 +45,6 @@ public class PokeBuildBasicModal : IModal
     [InputLabel("Level (1-100, leave blank for 50)")]
     [ModalTextInput("pb_level", placeholder: "50", maxLength: 3)]
     public string Level { get; set; } = "";
-
-    [RequiredInput(false)]
-    [InputLabel("Nature (optional, leave blank for random)")]
-    [ModalTextInput("pb_nature", placeholder: "e.g. Adamant", maxLength: 20)]
-    public string Nature { get; set; } = "";
-
-    [RequiredInput(false)]
-    [InputLabel("Shiny? (type yes or no, default: no)")]
-    [ModalTextInput("pb_shiny", placeholder: "no", maxLength: 3)]
-    public string Shiny { get; set; } = "";
 }
 
 public class PokeBuildStatsModal : IModal
@@ -72,7 +64,7 @@ public class PokeBuildStatsModal : IModal
 
 public class PokeBuildItemModal : IModal
 {
-    public string Title => "🎒 Item, Ball & Moves";
+    public string Title => "🎒 Item & Moves";
 
     [RequiredInput(false)]
     [InputLabel("Held Item (optional)")]
@@ -80,13 +72,9 @@ public class PokeBuildItemModal : IModal
     public string Item { get; set; } = "";
 
     [RequiredInput(false)]
-    [InputLabel("Poké Ball (optional)")]
-    [ModalTextInput("pb_ball", placeholder: "e.g. Master Ball", maxLength: 30)]
-    public string Ball { get; set; } = "";
-
-    [RequiredInput(false)]
     [InputLabel("Moves (one per line, up to 4)")]
-    [ModalTextInput("pb_moves", TextInputStyle.Paragraph, placeholder: "Thunderbolt\nIce Beam\nFlamethrower\nSurf", maxLength: 200)]
+    [ModalTextInput("pb_moves", TextInputStyle.Paragraph,
+        placeholder: "Thunderbolt\nIce Beam\nFlamethrower\nSurf", maxLength: 200)]
     public string Moves { get; set; } = "";
 }
 
@@ -102,9 +90,35 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         "Rock", "Ghost", "Dragon", "Dark", "Steel", "Fairy", "Stellar",
     ];
 
-    // ─── Slash commands ───────────────────────────────────────────────────────
+    // ─── Panel button (single button, game auto-detected) ─────────────────────
 
-    [SlashCommand("pokebuild-setup", "Post the permanent Pokémon builder panel in this channel (Admin only)")]
+    [ComponentInteraction("pb_start")]
+    public async Task OnPanelStartAsync()
+    {
+        if (Context.Guild == null)
+        {
+            await RespondAsync("❌ This can only be used in a server.", ephemeral: true).ConfigureAwait(false);
+            return;
+        }
+        var gameType = PokeBuildPanelManager.CurrentGameType;
+        await RespondWithModalAsync<PokeBuildBasicModal>($"pb_basic_{gameType}").ConfigureAwait(false);
+    }
+
+    // Kept for backward-compat with old panels that still have game-specific buttons
+    [ComponentInteraction("pb_start_*")]
+    public async Task OnPanelStartGameAsync(string gameType)
+    {
+        if (Context.Guild == null)
+        {
+            await RespondAsync("❌ This can only be used in a server.", ephemeral: true).ConfigureAwait(false);
+            return;
+        }
+        await RespondWithModalAsync<PokeBuildBasicModal>($"pb_basic_{gameType}").ConfigureAwait(false);
+    }
+
+    // ─── Slash commands (admin / power-user fallback) ─────────────────────────
+
+    [SlashCommand("pokebuild-setup", "Post the permanent Pokémon builder panel (Admin only)")]
     public async Task PokeBuildSetupAsync()
     {
         if (Context.Guild == null)
@@ -127,39 +141,9 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         await FollowupAsync("✅ Builder panel posted! The bot will keep it at the bottom automatically.", ephemeral: true).ConfigureAwait(false);
     }
 
-    // Kept as fallback — slash commands still work alongside the panel
-    [SlashCommand("pokebuild", "Build a Scarlet/Violet Pokémon step by step")]
-    public async Task PokeBuildSVAsync()
-        => await StartBuilderAsync("sv").ConfigureAwait(false);
-
-    [SlashCommand("pokebuild-la", "Build a Legends: Arceus Pokémon step by step")]
-    public async Task PokeBuildLAAsync()
-        => await StartBuilderAsync("la").ConfigureAwait(false);
-
-    [SlashCommand("pokebuild-plza", "Build a Legends: Z-A Pokémon step by step")]
-    public async Task PokeBuildPLZAAsync()
-        => await StartBuilderAsync("plza").ConfigureAwait(false);
-
-    [SlashCommand("pokebuild-swsh", "Build a Sword/Shield Pokémon step by step")]
-    public async Task PokeBuildSWSHAsync()
-        => await StartBuilderAsync("swsh").ConfigureAwait(false);
-
-    [SlashCommand("pokebuild-bdsp", "Build a BDSP Pokémon step by step")]
-    public async Task PokeBuildBDSPAsync()
-        => await StartBuilderAsync("bdsp").ConfigureAwait(false);
-
-    // ─── Panel button → open builder ─────────────────────────────────────────
-
-    [ComponentInteraction("pb_start_*")]
-    public async Task OnPanelStartAsync(string gameType)
-    {
-        if (Context.Guild == null)
-        {
-            await RespondAsync("❌ This can only be used in a server.", ephemeral: true).ConfigureAwait(false);
-            return;
-        }
-        await RespondWithModalAsync<PokeBuildBasicModal>($"pb_basic_{gameType}").ConfigureAwait(false);
-    }
+    [SlashCommand("pokebuild", "Build a Pokémon (uses the bot's current game mode)")]
+    public async Task PokeBuildAsync()
+        => await StartBuilderAsync(PokeBuildPanelManager.CurrentGameType).ConfigureAwait(false);
 
     private async Task StartBuilderAsync(string gameType)
     {
@@ -183,14 +167,21 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         session.GameType = gameType;
         session.Species  = modal.Species.Trim();
         session.Level    = int.TryParse(modal.Level.Trim(), out int lvl) ? Math.Clamp(lvl, 1, 100) : 50;
-        session.Nature   = modal.Nature.Trim();
-        session.Shiny    = modal.Shiny.Trim().Equals("yes", StringComparison.OrdinalIgnoreCase);
+        // Nature, Ball, Shiny etc. reset — user picks via dropdowns/toggles
+        session.Nature   = "";
+        session.Ball     = "";
+        session.Shiny    = false;
+        session.Alpha    = false;
+        session.TeraType = "";
+        session.IVs      = "";
+        session.EVs      = "";
+        session.Item     = "";
+        session.Move1 = session.Move2 = session.Move3 = session.Move4 = "";
 
         var msg = await FollowupAsync(
             embed: BuildEmbed(session),
             components: BuildComponents(session, userId)
         ).ConfigureAwait(false);
-
         session.MessageId = msg.Id;
     }
 
@@ -199,7 +190,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
     {
         if (!ulong.TryParse(userIdStr, out var userId) || !Sessions.TryGetValue(userId, out var session))
         {
-            await RespondAsync("❌ Session expired. Please use `/pokebuild` again.", ephemeral: true).ConfigureAwait(false);
+            await RespondAsync("❌ Session expired. Please start again.", ephemeral: true).ConfigureAwait(false);
             return;
         }
         await DeferAsync().ConfigureAwait(false);
@@ -213,15 +204,13 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
     {
         if (!ulong.TryParse(userIdStr, out var userId) || !Sessions.TryGetValue(userId, out var session))
         {
-            await RespondAsync("❌ Session expired. Please use `/pokebuild` again.", ephemeral: true).ConfigureAwait(false);
+            await RespondAsync("❌ Session expired. Please start again.", ephemeral: true).ConfigureAwait(false);
             return;
         }
         await DeferAsync().ConfigureAwait(false);
 
         if (session.GameType != "la")
             session.Item = modal.Item.Trim();
-
-        session.Ball = modal.Ball.Trim();
 
         var lines = modal.Moves.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         session.Move1 = lines.ElementAtOrDefault(0) ?? "";
@@ -239,7 +228,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
     {
         if (!ulong.TryParse(userIdStr, out var userId) || !Sessions.ContainsKey(userId))
         {
-            await RespondAsync("❌ Session expired. Please use `/pokebuild` again.", ephemeral: true).ConfigureAwait(false);
+            await RespondAsync("❌ Session expired. Please start again.", ephemeral: true).ConfigureAwait(false);
             return;
         }
         if (userId != Context.User.Id)
@@ -255,7 +244,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
     {
         if (!ulong.TryParse(userIdStr, out var userId) || !Sessions.ContainsKey(userId))
         {
-            await RespondAsync("❌ Session expired. Please use `/pokebuild` again.", ephemeral: true).ConfigureAwait(false);
+            await RespondAsync("❌ Session expired. Please start again.", ephemeral: true).ConfigureAwait(false);
             return;
         }
         if (userId != Context.User.Id)
@@ -302,6 +291,46 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         await UpdateBuilderMessageAsync(session, userId).ConfigureAwait(false);
     }
 
+    // ─── Select menu handlers ─────────────────────────────────────────────────
+
+    [ComponentInteraction("pb_nature_*")]
+    public async Task OnNatureSelectAsync(string userIdStr)
+    {
+        if (!ulong.TryParse(userIdStr, out var userId) || !Sessions.TryGetValue(userId, out var session))
+        {
+            await RespondAsync("❌ Session expired.", ephemeral: true).ConfigureAwait(false);
+            return;
+        }
+        if (userId != Context.User.Id)
+        {
+            await RespondAsync("❌ This builder belongs to another user.", ephemeral: true).ConfigureAwait(false);
+            return;
+        }
+        var component = (SocketMessageComponent)Context.Interaction;
+        session.Nature = component.Data.Values.FirstOrDefault() ?? "";
+        await DeferAsync().ConfigureAwait(false);
+        await UpdateBuilderMessageAsync(session, userId).ConfigureAwait(false);
+    }
+
+    [ComponentInteraction("pb_ball_*")]
+    public async Task OnBallSelectAsync(string userIdStr)
+    {
+        if (!ulong.TryParse(userIdStr, out var userId) || !Sessions.TryGetValue(userId, out var session))
+        {
+            await RespondAsync("❌ Session expired.", ephemeral: true).ConfigureAwait(false);
+            return;
+        }
+        if (userId != Context.User.Id)
+        {
+            await RespondAsync("❌ This builder belongs to another user.", ephemeral: true).ConfigureAwait(false);
+            return;
+        }
+        var component = (SocketMessageComponent)Context.Interaction;
+        session.Ball = component.Data.Values.FirstOrDefault() ?? "";
+        await DeferAsync().ConfigureAwait(false);
+        await UpdateBuilderMessageAsync(session, userId).ConfigureAwait(false);
+    }
+
     [ComponentInteraction("pb_tera_*")]
     public async Task OnTeraSelectAsync(string userIdStr)
     {
@@ -324,22 +353,16 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
     [ComponentInteraction("pb_submit_*")]
     public async Task OnSubmitAsync(string userIdStr)
     {
-        if (!ulong.TryParse(userIdStr, out var userId))
-        {
-            await RespondAsync("❌ Invalid session.", ephemeral: true).ConfigureAwait(false);
-            return;
-        }
-        if (userId != Context.User.Id)
+        if (!ulong.TryParse(userIdStr, out var userId) || userId != Context.User.Id)
         {
             await RespondAsync("❌ This builder belongs to another user.", ephemeral: true).ConfigureAwait(false);
             return;
         }
         if (!Sessions.TryRemove(userId, out var session))
         {
-            await RespondAsync("❌ Session expired. Please use `/pokebuild` again.", ephemeral: true).ConfigureAwait(false);
+            await RespondAsync("❌ Session expired. Please start again.", ephemeral: true).ConfigureAwait(false);
             return;
         }
-
         await DeferAsync(ephemeral: false).ConfigureAwait(false);
         await DeleteBuilderMessageAsync(session).ConfigureAwait(false);
         await DispatchSubmitAsync(session).ConfigureAwait(false);
@@ -348,19 +371,14 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
     [ComponentInteraction("pb_cancel_*")]
     public async Task OnCancelAsync(string userIdStr)
     {
-        if (!ulong.TryParse(userIdStr, out var userId))
-        {
-            await RespondAsync("❌ Invalid session.", ephemeral: true).ConfigureAwait(false);
-            return;
-        }
-        if (userId != Context.User.Id)
+        if (!ulong.TryParse(userIdStr, out var userId) || userId != Context.User.Id)
         {
             await RespondAsync("❌ This builder belongs to another user.", ephemeral: true).ConfigureAwait(false);
             return;
         }
         if (!Sessions.TryRemove(userId, out var session))
         {
-            await RespondAsync("❌ No active builder session.", ephemeral: true).ConfigureAwait(false);
+            await RespondAsync("❌ No active builder.", ephemeral: true).ConfigureAwait(false);
             return;
         }
         await DeferAsync(ephemeral: true).ConfigureAwait(false);
@@ -389,7 +407,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
                     hasMoves ? BuildMovePostProcess<PK9>(s) : null
                 ).ConfigureAwait(false);
                 break;
-
             case "la":
                 await CreatePokemonHelper.ExecuteCreatePokemonAsync<PA8>(
                     Context, s.Species, s.Shiny, null, ball, s.Level, nature, ivs, evs,
@@ -397,7 +414,6 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
                     hasMoves ? BuildMovePostProcess<PA8>(s) : null
                 ).ConfigureAwait(false);
                 break;
-
             case "plza":
                 await CreatePokemonHelper.ExecuteCreatePokemonAsync<PA9>(
                     Context, s.Species, s.Shiny, item, ball, s.Level, nature, ivs, evs,
@@ -405,23 +421,20 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
                     hasMoves ? BuildMovePostProcess<PA9>(s) : null
                 ).ConfigureAwait(false);
                 break;
-
             case "swsh":
                 await CreatePokemonHelper.ExecuteCreatePokemonAsync<PK8>(
                     Context, s.Species, s.Shiny, item, ball, s.Level, nature, ivs, evs, "",
                     hasMoves ? BuildMovePostProcess<PK8>(s) : null
                 ).ConfigureAwait(false);
                 break;
-
             case "bdsp":
                 await CreatePokemonHelper.ExecuteCreatePokemonAsync<PB8>(
                     Context, s.Species, s.Shiny, item, ball, s.Level, nature, ivs, evs, "",
                     hasMoves ? BuildMovePostProcess<PB8>(s) : null
                 ).ConfigureAwait(false);
                 break;
-
             default:
-                await FollowupAsync("❌ Unknown game type. Please start a new builder.", ephemeral: true).ConfigureAwait(false);
+                await FollowupAsync("❌ Unknown game type.", ephemeral: true).ConfigureAwait(false);
                 break;
         }
     }
@@ -432,8 +445,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         {
             var moveNames = GameInfo.GetStrings("en").movelist;
             var ids = new[] { s.Move1, s.Move2, s.Move3, s.Move4 }
-                .Select(m => FindMoveId(moveNames, m))
-                .ToArray();
+                .Select(m => FindMoveId(moveNames, m)).ToArray();
             if (ids[0] > 0) pk.Move1 = ids[0];
             if (ids[1] > 0) pk.Move2 = ids[1];
             if (ids[2] > 0) pk.Move3 = ids[2];
@@ -445,95 +457,99 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
     private static ushort FindMoveId(string[] moveNames, string moveName)
     {
         if (string.IsNullOrWhiteSpace(moveName)) return 0;
-        var idx = Array.FindIndex(moveNames, 1, mn =>
-            mn.Equals(moveName.Trim(), StringComparison.OrdinalIgnoreCase));
+        var idx = Array.FindIndex(moveNames, 1,
+            mn => mn.Equals(moveName.Trim(), StringComparison.OrdinalIgnoreCase));
         return idx > 0 ? (ushort)idx : (ushort)0;
     }
 
-    // ─── Embed builder ────────────────────────────────────────────────────────
+    // ─── Builder embed ────────────────────────────────────────────────────────
 
     private static Embed BuildEmbed(PokemonBuilderState s)
     {
-        var gameLabel = s.GameType switch
-        {
-            "sv"   => "Scarlet/Violet 🟣",
-            "la"   => "Legends: Arceus 🏔️",
-            "plza" => "Legends: Z-A 🗼",
-            "swsh" => "Sword/Shield ⚔️",
-            "bdsp" => "BDSP 💎",
-            _      => s.GameType,
-        };
-
         var eb = new EmbedBuilder()
             .WithTitle("🔨 Building Your Pokémon")
             .WithColor(Color.Blue)
-            .WithDescription($"**Game:** {gameLabel}\nCustomize your Pokémon below, then hit **✅ Submit Trade**!")
+            .WithDescription("Pick your options below, then hit **✅ Submit Trade**!")
             .AddField("🐾 Species", string.IsNullOrWhiteSpace(s.Species) ? "*Not set*" : s.Species, inline: true)
-            .AddField("📊 Level",   s.Level.ToString(), inline: true)
+            .AddField("📊 Level",   s.Level.ToString(),  inline: true)
             .AddField("✨ Shiny",   s.Shiny ? "Yes ⭐" : "No", inline: true)
             .AddField("🌿 Nature",  string.IsNullOrWhiteSpace(s.Nature) ? "*Random*" : s.Nature, inline: true)
-            .AddField("🏆 IVs",     string.IsNullOrWhiteSpace(s.IVs) ? "31 all (default)" : s.IVs, inline: true)
-            .AddField("💪 EVs",     string.IsNullOrWhiteSpace(s.EVs) ? "None" : s.EVs, inline: true)
-            .AddField("💎 Item",    string.IsNullOrWhiteSpace(s.Item) ? "None" : s.Item, inline: true)
-            .AddField("⚾ Ball",    string.IsNullOrWhiteSpace(s.Ball) ? "Default" : s.Ball, inline: true);
+            .AddField("⚾ Ball",    string.IsNullOrWhiteSpace(s.Ball)   ? "*Default*" : s.Ball,  inline: true)
+            .AddField("🏆 IVs",     string.IsNullOrWhiteSpace(s.IVs)   ? "31 all" : s.IVs,     inline: true)
+            .AddField("💪 EVs",     string.IsNullOrWhiteSpace(s.EVs)   ? "None" : s.EVs,       inline: true)
+            .AddField("💎 Item",    string.IsNullOrWhiteSpace(s.Item)   ? "None" : s.Item,      inline: true);
 
         if (s.GameType == "sv")
-            eb.AddField("🧬 Tera Type", string.IsNullOrWhiteSpace(s.TeraType) ? "Default" : s.TeraType, inline: true);
+            eb.AddField("🧬 Tera Type", string.IsNullOrWhiteSpace(s.TeraType) ? "*Default*" : s.TeraType, inline: true);
         else if (s.GameType is "la" or "plza")
             eb.AddField("⭐ Alpha", s.Alpha ? "Yes" : "No", inline: true);
 
-        var moveList = new[] { s.Move1, s.Move2, s.Move3, s.Move4 }
-            .Where(m => !string.IsNullOrWhiteSpace(m))
-            .ToList();
-        if (moveList.Count > 0)
-            eb.AddField("⚔️ Moves", string.Join("\n", moveList.Select((m, i) => $"{i + 1}. {m}")));
+        var moves = new[] { s.Move1, s.Move2, s.Move3, s.Move4 }
+            .Where(m => !string.IsNullOrWhiteSpace(m)).ToList();
+        if (moves.Count > 0)
+            eb.AddField("⚔️ Moves", string.Join("\n", moves.Select((m, i) => $"{i + 1}. {m}")));
 
-        eb.WithFooter($"PokedexMasterBot {TradeBot.Version} • Fill in details and press Submit Trade!");
-
+        eb.WithFooter($"PokedexMasterBot {TradeBot.Version} • Use dropdowns & buttons below to customize");
         return eb.Build();
     }
 
-    // ─── Component builder ────────────────────────────────────────────────────
+    // ─── Builder components ───────────────────────────────────────────────────
 
     private static MessageComponent BuildComponents(PokemonBuilderState s, ulong userId)
     {
         var cb = new ComponentBuilder();
 
-        // Row 0: Stats + Item/Ball/Moves
-        cb.WithButton("📊 IVs & EVs",        $"pb_stats_{userId}", ButtonStyle.Secondary, row: 0);
-        cb.WithButton("🎒 Item, Ball & Moves", $"pb_item_{userId}",  ButtonStyle.Secondary, row: 0);
-
-        // Row 1: Shiny toggle + game-specific toggle
+        // Row 0: utility buttons
+        cb.WithButton("📊 IVs & EVs", $"pb_stats_{userId}", ButtonStyle.Secondary, row: 0);
+        cb.WithButton("🎒 Item & Moves", $"pb_item_{userId}", ButtonStyle.Secondary, row: 0);
         cb.WithButton(
             s.Shiny ? "✨ Shiny: ON" : "✨ Shiny: OFF",
             $"pb_shiny_{userId}",
             s.Shiny ? ButtonStyle.Success : ButtonStyle.Secondary,
-            row: 1
+            row: 0
         );
-
         if (s.GameType is "la" or "plza")
         {
             cb.WithButton(
                 s.Alpha ? "⭐ Alpha: ON" : "⭐ Alpha: OFF",
                 $"pb_alpha_{userId}",
                 s.Alpha ? ButtonStyle.Success : ButtonStyle.Secondary,
-                row: 1
+                row: 0
             );
         }
 
-        // Row 2 (SV only): Tera Type select menu
+        // Row 1: Nature dropdown (all 25 legal natures)
+        var natureMenu = new SelectMenuBuilder()
+            .WithCustomId($"pb_nature_{userId}")
+            .WithPlaceholder("🌿 Nature — pick one...");
+        foreach (var (name, effect) in PokeBuildPanelManager.Natures)
+            natureMenu.AddOption(name, name, effect,
+                isDefault: name.Equals(s.Nature, StringComparison.OrdinalIgnoreCase));
+        cb.WithSelectMenu(natureMenu, row: 1);
+
+        // Row 2: Ball dropdown (game-specific legal balls)
+        var ballMenu = new SelectMenuBuilder()
+            .WithCustomId($"pb_ball_{userId}")
+            .WithPlaceholder("⚾ Poké Ball — pick one...");
+        foreach (var ball in PokeBuildPanelManager.GetBalls())
+            ballMenu.AddOption(ball, ball,
+                isDefault: ball.Equals(s.Ball, StringComparison.OrdinalIgnoreCase));
+        cb.WithSelectMenu(ballMenu, row: 2);
+
+        // Row 3: Tera Type (SV only)
         if (s.GameType == "sv")
         {
-            var menu = new SelectMenuBuilder()
+            var teraMenu = new SelectMenuBuilder()
                 .WithCustomId($"pb_tera_{userId}")
-                .WithPlaceholder("🎮 Select Tera Type...");
+                .WithPlaceholder("🧬 Tera Type — pick one...");
             foreach (var t in TeraTypes)
-                menu.AddOption(t, t, isDefault: t.Equals(s.TeraType, StringComparison.OrdinalIgnoreCase));
-            cb.WithSelectMenu(menu, row: 2);
+                teraMenu.AddOption(t, t,
+                    isDefault: t.Equals(s.TeraType, StringComparison.OrdinalIgnoreCase));
+            cb.WithSelectMenu(teraMenu, row: 3);
         }
 
-        // Final row: Submit + Cancel
-        int actionRow = s.GameType == "sv" ? 3 : 2;
+        // Final row: submit + cancel
+        int actionRow = s.GameType == "sv" ? 4 : 3;
         cb.WithButton("✅ Submit Trade", $"pb_submit_{userId}", ButtonStyle.Success, row: actionRow);
         cb.WithButton("❌ Cancel",       $"pb_cancel_{userId}", ButtonStyle.Danger,   row: actionRow);
 
@@ -547,7 +563,8 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         if (session.MessageId == 0) return;
         try
         {
-            if (await Context.Channel.GetMessageAsync(session.MessageId).ConfigureAwait(false) is IUserMessage msg)
+            if (await Context.Channel.GetMessageAsync(session.MessageId).ConfigureAwait(false)
+                is IUserMessage msg)
             {
                 await msg.ModifyAsync(m =>
                 {
@@ -556,7 +573,7 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
                 }).ConfigureAwait(false);
             }
         }
-        catch { /* message may have been deleted */ }
+        catch { }
     }
 
     private async Task DeleteBuilderMessageAsync(PokemonBuilderState session)
@@ -564,10 +581,10 @@ public class PokeBuildModule : InteractionModuleBase<SocketInteractionContext>
         if (session.MessageId == 0) return;
         try
         {
-            if (await Context.Channel.GetMessageAsync(session.MessageId).ConfigureAwait(false) is IUserMessage msg)
+            if (await Context.Channel.GetMessageAsync(session.MessageId).ConfigureAwait(false)
+                is IUserMessage msg)
                 await msg.DeleteAsync().ConfigureAwait(false);
         }
-        catch { /* already deleted */ }
+        catch { }
     }
-
 }
