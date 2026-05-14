@@ -27,9 +27,12 @@ jobs:
           $content = Get-Content "SysBot.Pokemon/Helpers/TradeBot.cs" -Raw
           $match = [regex]::Match($content, 'Version\s*=\s*"v?([0-9.]+)"')
           $ver = $match.Groups[1].Value
+          $build = "${{ github.run_number }}"
+          $tag = "v$ver-build.$build"
           "VERSION=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "TAG=v$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          Write-Host "Version: $ver"
+          "TAG=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "TITLE=PokedexMasterBot v$ver (Build $build)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Version: $ver | Tag: $tag"
 
       - name: Publish
         run: dotnet publish SysBot.Pokemon.WinForms/SysBot.Pokemon.WinForms.csproj -c Release
@@ -42,22 +45,14 @@ jobs:
           "EXE_PATH=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Write-Host "Exe: $($exe.Name)"
 
-      - name: Delete existing release and tag if same version exists
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release delete "${{ steps.version.outputs.TAG }}" --yes 2>$null
-          git push origin --delete "${{ steps.version.outputs.TAG }}" 2>$null
-        continue-on-error: true
-
       - name: Create GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = "${{ steps.version.outputs.TAG }}"
+          $title = "${{ steps.version.outputs.TITLE }}"
           $exe = "${{ steps.exe.outputs.EXE_PATH }}"
           gh release create $tag "$exe" `
-            --title "PokedexMasterBot $tag" `
+            --title "$title" `
             --notes "Automated release — built from latest push to main."
