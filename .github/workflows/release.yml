@@ -52,10 +52,12 @@ jobs:
         continue-on-error: true
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.TAG }}
-          name: PokedexMasterBot ${{ steps.version.outputs.TAG }}
-          body: |
-            Automated release — built from latest push to main.
-          files: ${{ steps.exe.outputs.EXE_PATH }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ steps.version.outputs.TAG }}"
+          $exe = "${{ steps.exe.outputs.EXE_PATH }}"
+          gh release create $tag "$exe" `
+            --title "PokedexMasterBot $tag" `
+            --notes "Automated release — built from latest push to main."
