@@ -126,7 +126,24 @@ public static class QueueHelper<T> where T : PKM, new()
         var hub = SysCord<T>.Runner.Hub;
         var Info = hub.Queues.Info;
         var isSudo = sig == RequestSignificance.Owner;
+
+        // Cooldown check — only applies after successful parse/generation (we're past those here)
+        var discordCfg = SysCord<T>.Runner.Config.Discord;
+        int cooldownMins = discordCfg.TradeCooldownMinutes;
+        bool cooldownActive = cooldownMins > 0 && !isSudo && !IsExemptFromCooldown(trader, discordCfg);
+        if (cooldownActive && TradeCooldownTracker.IsOnCooldown(userID, cooldownMins, out var remaining))
+        {
+            var mins = (int)remaining.TotalMinutes;
+            var secs = remaining.Seconds;
+            var timeStr = mins > 0 ? $"{mins}m {secs}s" : $"{secs}s";
+            await context.Channel.SendMessageAsync($"{trader.Mention} - You're on cooldown! Please wait **{timeStr}** before requesting another trade.").ConfigureAwait(false);
+            return new TradeQueueResult(false);
+        }
+
         var added = Info.AddToTradeQueue(trade, userID, false, isSudo);
+
+        if (added == QueueResultAdd.Added && cooldownActive)
+            TradeCooldownTracker.RecordTrade(userID);
 
         // Start queue position updates for Discord notification
         if (added != QueueResultAdd.AlreadyInQueue && added != QueueResultAdd.NotAllowedItem && notifier is DiscordTradeNotifier<T> discordNotifier)
@@ -740,6 +757,16 @@ public static class QueueHelper<T> where T : PKM, new()
             int tradeCount = tradeCodeStorage.GetTradeCount(trader.Id);
             _ = SendMilestoneEmbed(tradeCount, context.Channel, trader);
         }
+    }
+
+    private static bool IsExemptFromCooldown(SocketUser user, DiscordSettings cfg)
+    {
+        var exemptList = cfg.RolesExemptFromCooldown;
+        if (exemptList.List.Count == 0)
+            return false;
+        if (user is not SocketGuildUser guildUser)
+            return false;
+        return guildUser.Roles.Any(r => exemptList.Contains(r.Id) || exemptList.Contains(r.Name));
     }
 
     private static int GenerateUniqueTradeID()
