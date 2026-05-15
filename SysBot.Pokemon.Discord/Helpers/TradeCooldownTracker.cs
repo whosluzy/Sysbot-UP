@@ -7,19 +7,10 @@ public static class TradeCooldownTracker
 {
     private static readonly ConcurrentDictionary<ulong, DateTime> _lastTrade = new();
 
-    public static bool IsOnCooldown(ulong userId, int cooldownMinutes, out TimeSpan remaining)
+    public static bool IsOnCooldown(ulong userId, int cooldownMinutes)
     {
-        if (_lastTrade.TryGetValue(userId, out var lastTrade))
-        {
-            var cooldown = TimeSpan.FromMinutes(cooldownMinutes);
-            var elapsed = DateTime.UtcNow - lastTrade;
-            if (elapsed < cooldown)
-            {
-                remaining = cooldown - elapsed;
-                return true;
-            }
-        }
-        remaining = TimeSpan.Zero;
+        if (_lastTrade.TryGetValue(userId, out var last))
+            return (DateTime.UtcNow - last).TotalMinutes < cooldownMinutes;
         return false;
     }
 
