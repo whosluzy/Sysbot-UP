@@ -127,35 +127,13 @@ public static class QueueHelper<T> where T : PKM, new()
         var Info = hub.Queues.Info;
         var isSudo = sig == RequestSignificance.Owner;
 
-        // Cooldown check — Pokémon was already successfully parsed/generated before reaching here
-        var cfg = SysCord<T>.Runner.Config.Discord;
-        int cooldownMins = cfg.TradeCooldownMinutes;
-        bool shouldCooldown = cooldownMins > 0 && !isSudo;
-        if (shouldCooldown)
-        {
-            bool exempt = trader is SocketGuildUser gu
-                && cfg.RolesExemptFromCooldown.List.Count > 0
-                && gu.Roles.Any(r => cfg.RolesExemptFromCooldown.Contains(r.Id) || cfg.RolesExemptFromCooldown.Contains(r.Name));
-            if (!exempt && TradeCooldownTracker.IsOnCooldown(userID, cooldownMins, out int minsLeft))
-            {
-                var msg = $"Please wait {minsLeft} minutes to request another pokemon or GET PREMIUM for UNLIMITED trades.";
-                try { await trader.SendMessageAsync(msg).ConfigureAwait(false); }
-                catch { await context.Channel.SendMessageAsync($"{trader.Mention} {msg}").ConfigureAwait(false); }
-                try { await context.Message.DeleteAsync().ConfigureAwait(false); } catch { }
-                return new TradeQueueResult(false);
-            }
-        }
+        if (await EnforceCooldown(context, trader, userID).ConfigureAwait(false))
+            return new TradeQueueResult(false);
 
         var added = Info.AddToTradeQueue(trade, userID, false, isSudo);
 
-        if (added == QueueResultAdd.Added && shouldCooldown)
-        {
-            bool exempt = trader is SocketGuildUser gu2
-                && cfg.RolesExemptFromCooldown.List.Count > 0
-                && gu2.Roles.Any(r => cfg.RolesExemptFromCooldown.Contains(r.Id) || cfg.RolesExemptFromCooldown.Contains(r.Name));
-            if (!exempt)
-                TradeCooldownTracker.RecordTrade(userID);
-        }
+        if (added == QueueResultAdd.Added)
+            RecordCooldownIfApplicable(trader, userID);
 
         // Start queue position updates for Discord notification
         if (added != QueueResultAdd.AlreadyInQueue && added != QueueResultAdd.NotAllowedItem && notifier is DiscordTradeNotifier<T> discordNotifier)
@@ -360,7 +338,14 @@ public static class QueueHelper<T> where T : PKM, new()
         var trade = new TradeEntry<T>(detail, userID, PokeRoutineType.Batch, name, uniqueTradeID: uniqueTradeID);
         var hub = SysCord<T>.Runner.Hub;
         var Info = hub.Queues.Info;
+
+        if (await EnforceCooldown(context, trader, userID).ConfigureAwait(false))
+            return;
+
         var added = Info.AddToTradeQueue(trade, userID, false, sig == RequestSignificance.Owner);
+
+        if (added == QueueResultAdd.Added)
+            RecordCooldownIfApplicable(trader, userID);
 
         // Send trade code once
         await EmbedHelper.SendTradeCodeEmbedAsync(trader, code).ConfigureAwait(false);
@@ -547,7 +532,14 @@ public static class QueueHelper<T> where T : PKM, new()
         var trade = new TradeEntry<T>(detail, userID, PokeRoutineType.Batch, name, uniqueTradeID: uniqueTradeID);
         var hub = SysCord<T>.Runner.Hub;
         var Info = hub.Queues.Info;
+
+        if (await EnforceCooldown(context, trader, userID).ConfigureAwait(false))
+            return;
+
         var added = Info.AddToTradeQueue(trade, userID, false, sig == RequestSignificance.Owner);
+
+        if (added == QueueResultAdd.Added)
+            RecordCooldownIfApplicable(trader, userID);
 
         await EmbedHelper.SendTradeCodeEmbedAsync(trader, code).ConfigureAwait(false);
 
@@ -663,7 +655,14 @@ public static class QueueHelper<T> where T : PKM, new()
         var trade = new TradeEntry<T>(detail, userID, PokeRoutineType.Batch, name, uniqueTradeID: uniqueTradeID);
         var hub = SysCord<T>.Runner.Hub;
         var Info = hub.Queues.Info;
+
+        if (await EnforceCooldown(context, trader, userID).ConfigureAwait(false))
+            return;
+
         var added = Info.AddToTradeQueue(trade, userID, false, sig == RequestSignificance.Owner);
+
+        if (added == QueueResultAdd.Added)
+            RecordCooldownIfApplicable(trader, userID);
 
         // Send trade code once
         await EmbedHelper.SendTradeCodeEmbedAsync(trader, code).ConfigureAwait(false);
@@ -769,6 +768,34 @@ public static class QueueHelper<T> where T : PKM, new()
             int tradeCount = tradeCodeStorage.GetTradeCount(trader.Id);
             _ = SendMilestoneEmbed(tradeCount, context.Channel, trader);
         }
+    }
+
+    /// <summary>Returns true if the user is on cooldown (and notifies them). False to proceed.</summary>
+    internal static async Task<bool> EnforceCooldown(SocketCommandContext context, SocketUser trader, ulong userID)
+    {
+        var cfg = SysCord<T>.Runner.Config.Discord;
+        if (cfg.TradeCooldownMinutes <= 0)
+            return false;
+        if (TradeCooldownTracker.IsExempt(trader, cfg))
+            return false;
+        if (!TradeCooldownTracker.IsOnCooldown(userID, cfg.TradeCooldownMinutes, out int minsLeft))
+            return false;
+
+        var msg = TradeCooldownTracker.BuildCooldownMessage(minsLeft);
+        try { await trader.SendMessageAsync(msg).ConfigureAwait(false); }
+        catch { await context.Channel.SendMessageAsync($"{trader.Mention} {msg}").ConfigureAwait(false); }
+        try { await context.Message.DeleteAsync().ConfigureAwait(false); } catch { }
+        return true;
+    }
+
+    internal static void RecordCooldownIfApplicable(SocketUser trader, ulong userID)
+    {
+        var cfg = SysCord<T>.Runner.Config.Discord;
+        if (cfg.TradeCooldownMinutes <= 0)
+            return;
+        if (TradeCooldownTracker.IsExempt(trader, cfg))
+            return;
+        TradeCooldownTracker.RecordTrade(userID);
     }
 
     private static int GenerateUniqueTradeID()

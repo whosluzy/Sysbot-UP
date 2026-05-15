@@ -207,8 +207,21 @@ public static class CreatePokemonHelper
 
         var trade = new TradeEntry<T>(detail, userID, PokeRoutineType.LinkTrade, context.User.Username, uniqueTradeID);
 
+        // Cooldown check (slash command — uses true ephemeral)
+        var discordCfg = SysCord<T>.Runner.Config.Discord;
+        bool exempt = TradeCooldownTracker.IsExempt(context.User, discordCfg);
+        if (discordCfg.TradeCooldownMinutes > 0 && !exempt
+            && TradeCooldownTracker.IsOnCooldown(userID, discordCfg.TradeCooldownMinutes, out int minsLeft))
+        {
+            await context.Interaction.FollowupAsync(TradeCooldownTracker.BuildCooldownMessage(minsLeft), ephemeral: true).ConfigureAwait(false);
+            return false;
+        }
+
         // Add to queue
         var added = Info.AddToTradeQueue(trade, userID, false, sig == RequestSignificance.Owner);
+
+        if (added == QueueResultAdd.Added && discordCfg.TradeCooldownMinutes > 0 && !exempt)
+            TradeCooldownTracker.RecordTrade(userID);
 
         if (added == QueueResultAdd.AlreadyInQueue)
         {

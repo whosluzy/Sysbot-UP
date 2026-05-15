@@ -257,7 +257,14 @@ namespace SysBot.Pokemon.Discord
             var trade = new TradeEntry<T>(detail, context.User.Id, PokeRoutineType.Batch, context.User.Username, uniqueTradeID);
             var hub = SysCord<T>.Runner.Hub;
             var Info = hub.Queues.Info;
+
+            if (await QueueHelper<T>.EnforceCooldown(context, context.User, context.User.Id).ConfigureAwait(false))
+                return;
+
             var added = Info.AddToTradeQueue(trade, context.User.Id, false, sig == RequestSignificance.Owner);
+
+            if (added == QueueResultAdd.Added)
+                QueueHelper<T>.RecordCooldownIfApplicable(context.User, context.User.Id);
 
             // Send trade code once
             await EmbedHelper.SendTradeCodeEmbedAsync(context.User, batchTradeCode).ConfigureAwait(false);
