@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Read(//c/Users/vitor/OneDrive/Desktop/FusionBot/**)",
-      "Bash(gh release *)"
-    ]
-  }
-}
