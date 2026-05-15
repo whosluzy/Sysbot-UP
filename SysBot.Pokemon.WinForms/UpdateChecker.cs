@@ -21,7 +21,7 @@ namespace SysBot.Pokemon.WinForms
 
         static UpdateChecker()
         {
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", "FusionBot");
+            _httpClient.DefaultRequestHeaders.Add("User-Agent", "PokedexMasterBot");
         }
 
         public static async Task<(bool UpdateAvailable, bool UpdateRequired, string NewVersion)> CheckForUpdatesAsync(bool forceShow = false, bool showDialog = true)

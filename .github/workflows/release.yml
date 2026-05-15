@@ -1,0 +1,76 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Bump patch version in TradeBot.cs
+        id: version
+        shell: pwsh
+        run: |
+          $file = "SysBot.Pokemon/Helpers/TradeBot.cs"
+          $content = Get-Content $file -Raw
+          $match = [regex]::Match($content, 'Version\s*=\s*"v?(\d+)\.(\d+)\.(\d+)"')
+          if (-not $match.Success) { Write-Error "Could not find version in $file"; exit 1 }
+          $major = $match.Groups[1].Value
+          $minor = $match.Groups[2].Value
+          $patch = [int]$match.Groups[3].Value + 1
+          $newVersion = "v$major.$minor.$patch"
+          $newContent = $content -replace 'Version\s*=\s*"v?(\d+\.\d+\.\d+)"', "Version = `"$newVersion`""
+          Set-Content $file $newContent -NoNewline
+          echo "TAG=$newVersion" >> $env:GITHUB_OUTPUT
+          echo "VERSION=$major.$minor.$patch" >> $env:GITHUB_OUTPUT
+          Write-Host "Bumped to $newVersion"
+
+      - name: Commit and tag version bump
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add SysBot.Pokemon/Helpers/TradeBot.cs
+          git commit -m "Bump version to ${{ steps.version.outputs.TAG }} [skip ci]"
+          git tag ${{ steps.version.outputs.TAG }}
+          git push origin main
+          git push origin ${{ steps.version.outputs.TAG }}
+
+      - name: Publish
+        run: dotnet publish SysBot.Pokemon.WinForms/SysBot.Pokemon.WinForms.csproj -c Release
+
+      - name: Find published exe
+        id: exe
+        shell: pwsh
+        run: |
+          $exes = Get-ChildItem -Path "SysBot.Pokemon.WinForms/bin/Release/net10.0-windows/win-x64/publish/" -Filter "*.exe" -ErrorAction SilentlyContinue
+          if (-not $exes) {
+            Write-Error "No .exe found in publish directory"
+            exit 1
+          }
+          $exePath = $exes[0].FullName
+          Write-Host "Found exe: $exePath"
+          echo "EXE_PATH=$exePath" >> $env:GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: PokedexMasterBot ${{ steps.version.outputs.TAG }}
+          body: "Automated release - built from latest push to main."
+          files: ${{ steps.exe.outputs.EXE_PATH }}
+          make_latest: true

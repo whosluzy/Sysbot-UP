@@ -952,7 +952,7 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
         var controllers = GetBotControllers();
 
         var mode = config?.Mode.ToString() ?? "Unknown";
-        var name = config?.Hub?.BotName ?? "FusionBot";
+        var name = config?.Hub?.BotName ?? "PokedexMasterBot";
 
         var version = SysBot.Pokemon.Helpers.TradeBot.Version;
 
@@ -1034,7 +1034,7 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                         var instance = new BotInstance
                         {
                             ProcessId = processId,
-                            Name = "FusionBot",
+                            Name = "PokedexMasterBot",
                             Port = capturedPort,
                             WebPort = 8080,
                             Version = "Unknown",
@@ -1066,10 +1066,10 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
         // Wait for all port scans to complete with overall timeout
         await Task.WhenAll(tasks).ConfigureAwait(false);
 
-        // Method 2: Check local FusionBot processes (fallback for instances not in standard port range)
+        // Method 2: Check local PokedexMasterBot processes (fallback for instances not in standard port range)
         try
         {
-            var processes = Process.GetProcessesByName("FusionBot")
+            var processes = Process.GetProcessesByName("PokedexMasterBot")
                 .Where(p => p.Id != currentPid);
 
             foreach (var process in processes)
@@ -1080,13 +1080,13 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                     if (string.IsNullOrEmpty(exePath))
                         continue;
 
-                    var botName = "FusionBot"; // default
+                    var botName = "PokedexMasterBot"; // default
                     if (!string.IsNullOrEmpty(exePath))
                     {
                         botName = Path.GetFileNameWithoutExtension(exePath);
                     }
 
-                    var portFile = Path.Combine(Path.GetDirectoryName(exePath)!, $"FusionBot_{process.Id}.port");
+                    var portFile = Path.Combine(Path.GetDirectoryName(exePath)!, $"PokedexMasterBot_{process.Id}.port");
                     if (!File.Exists(portFile))
                         continue;
 

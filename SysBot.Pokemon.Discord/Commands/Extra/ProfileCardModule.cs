@@ -71,7 +71,7 @@ namespace FusionBot.Modules
         // ===========================
         [Command("myinfo")]
         [Alias("mi")]
-        [Summary("Displays your FusionBot profile card.")]
+        [Summary("Displays your PokedexMasterBot profile card.")]
         public async Task MyInfoAsync(SocketGuildUser? targetUser = null)
         {
             // If no user is mentioned, fallback to the command invoker
@@ -147,7 +147,7 @@ namespace FusionBot.Modules
         // ===========================
         [Command("myinfoquote")]
         [Alias("miq")]
-        [Summary("Set your personal FusionBot profile quote.")]
+        [Summary("Set your personal PokedexMasterBot profile quote.")]
         public async Task SetQuoteAsync([Remainder] string quote)
         {
             // Validate quote length
