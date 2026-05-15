@@ -71,3 +71,4 @@ jobs:
           name: PokedexMasterBot ${{ steps.version.outputs.TAG }}
           body: "Automated release - built from latest push to main."
           files: ${{ steps.exe.outputs.EXE_PATH }}
+          make_latest: true
