@@ -136,10 +136,12 @@ public static class QueueHelper<T> where T : PKM, new()
             bool exempt = trader is SocketGuildUser gu
                 && cfg.RolesExemptFromCooldown.List.Count > 0
                 && gu.Roles.Any(r => cfg.RolesExemptFromCooldown.Contains(r.Id) || cfg.RolesExemptFromCooldown.Contains(r.Name));
-            if (!exempt && TradeCooldownTracker.IsOnCooldown(userID, cooldownMins))
+            if (!exempt && TradeCooldownTracker.IsOnCooldown(userID, cooldownMins, out int minsLeft))
             {
-                try { await trader.SendMessageAsync("Please wait 10 minutes to request again or get premium for unlimited trades!").ConfigureAwait(false); }
-                catch { await context.Channel.SendMessageAsync($"{trader.Mention} Please wait 10 minutes to request again or get premium for unlimited trades!").ConfigureAwait(false); }
+                var msg = $"Please wait {minsLeft} minutes to request another pokemon or GET PREMIUM for UNLIMITED trades.";
+                try { await trader.SendMessageAsync(msg).ConfigureAwait(false); }
+                catch { await context.Channel.SendMessageAsync($"{trader.Mention} {msg}").ConfigureAwait(false); }
+                try { await context.Message.DeleteAsync().ConfigureAwait(false); } catch { }
                 return new TradeQueueResult(false);
             }
         }
