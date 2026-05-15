@@ -3,12 +3,16 @@ using Discord.WebSocket;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Threading;
 
 namespace SysBot.Pokemon.Discord;
 
 public static class TradeCooldownTracker
 {
     private static readonly ConcurrentDictionary<ulong, DateTime> _lastTrade = new();
+
+    // Periodic sweep so entries from users who never come back don't sit in memory forever.
+    private static readonly Timer _sweepTimer = new(_ => Sweep(), null, TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30));
 
     public static bool IsOnCooldown(ulong userId, int cooldownMinutes, out int minutesRemaining)
     {
@@ -24,6 +28,8 @@ public static class TradeCooldownTracker
                 minutesRemaining = Math.Max(1, (int)Math.Ceiling((cooldown - elapsed).TotalMinutes));
                 return true;
             }
+            // Cooldown has expired — drop the entry so memory doesn't grow.
+            _lastTrade.TryRemove(userId, out _);
         }
         return false;
     }
@@ -52,5 +58,16 @@ public static class TradeCooldownTracker
             .WithDescription($"Please wait **{minutesRemaining} minutes** to request another pokemon.\n\n💎 **GET PREMIUM** for **UNLIMITED** trades!")
             .WithFooter("This message will disappear in 15 seconds.")
             .Build();
+    }
+
+    // Removes entries older than 1 hour — well past any reasonable cooldown.
+    private static void Sweep()
+    {
+        var cutoff = DateTime.UtcNow - TimeSpan.FromHours(1);
+        foreach (var kvp in _lastTrade)
+        {
+            if (kvp.Value < cutoff)
+                _lastTrade.TryRemove(kvp.Key, out _);
+        }
     }
 }
