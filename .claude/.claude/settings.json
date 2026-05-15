@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh auth *)",
+      "Bash(curl -s \"https://api.github.com/repos/whosluzy/Sysbot-UP/actions/runs?per_page=5\")",
+      "Bash(python -c \"import sys,json; runs=json.load\\(sys.stdin\\)['workflow_runs']; [print\\(r['id'], r['status'], r['conclusion'], r['head_sha'][:7], r['display_title']\\) for r in runs]\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\vitor\\OneDrive\\Desktop\\FusionBot\\.github\\workflows"
+    ]
+  }
+}
