@@ -1,3 +1,4 @@
+using Discord;
 using Discord.WebSocket;
 using System;
 using System.Collections.Concurrent;
@@ -43,6 +44,13 @@ public static class TradeCooldownTracker
         return gu.Roles.Any(r => list.Contains(r.Id) || list.Contains(r.Name));
     }
 
-    public static string BuildCooldownMessage(int minutesRemaining)
-        => $"Please wait {minutesRemaining} minutes to request another pokemon or GET PREMIUM for UNLIMITED trades.";
+    public static Embed BuildCooldownEmbed(int minutesRemaining)
+    {
+        return new EmbedBuilder()
+            .WithColor(Color.Orange)
+            .WithTitle("⏳ Trade Cooldown")
+            .WithDescription($"Please wait **{minutesRemaining} minutes** to request another pokemon.\n\n💎 **GET PREMIUM** for **UNLIMITED** trades!")
+            .WithFooter("This message will disappear in 15 seconds.")
+            .Build();
+    }
 }

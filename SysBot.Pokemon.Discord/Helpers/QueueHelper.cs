@@ -73,6 +73,10 @@ public static class QueueHelper<T> where T : PKM, new()
             return;
         }
 
+        // Cooldown check BEFORE sending trade code DM or queueing
+        if (await EnforceCooldown(context, trader, trader.Id).ConfigureAwait(false))
+            return;
+
         try
         {
             // Only send trade code for non-batch trades (batch container will handle its own)
@@ -126,9 +130,6 @@ public static class QueueHelper<T> where T : PKM, new()
         var hub = SysCord<T>.Runner.Hub;
         var Info = hub.Queues.Info;
         var isSudo = sig == RequestSignificance.Owner;
-
-        if (await EnforceCooldown(context, trader, userID).ConfigureAwait(false))
-            return new TradeQueueResult(false);
 
         var added = Info.AddToTradeQueue(trade, userID, false, isSudo);
 
@@ -781,10 +782,30 @@ public static class QueueHelper<T> where T : PKM, new()
         if (!TradeCooldownTracker.IsOnCooldown(userID, cfg.TradeCooldownMinutes, out int minsLeft))
             return false;
 
-        var msg = TradeCooldownTracker.BuildCooldownMessage(minsLeft);
-        try { await trader.SendMessageAsync(msg).ConfigureAwait(false); }
-        catch { await context.Channel.SendMessageAsync($"{trader.Mention} {msg}").ConfigureAwait(false); }
+        var embed = TradeCooldownTracker.BuildCooldownEmbed(minsLeft);
+
+        IUserMessage? sent = null;
+        try
+        {
+            var dm = await trader.CreateDMChannelAsync().ConfigureAwait(false);
+            sent = await dm.SendMessageAsync(embed: embed).ConfigureAwait(false);
+        }
+        catch
+        {
+            try { sent = await context.Channel.SendMessageAsync(text: trader.Mention, embed: embed).ConfigureAwait(false); } catch { }
+        }
+
         try { await context.Message.DeleteAsync().ConfigureAwait(false); } catch { }
+
+        if (sent != null)
+        {
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(15000).ConfigureAwait(false);
+                try { await sent.DeleteAsync().ConfigureAwait(false); } catch { }
+            });
+        }
+
         return true;
     }
 
