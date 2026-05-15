@@ -207,19 +207,14 @@ public static class CreatePokemonHelper
 
         var trade = new TradeEntry<T>(detail, userID, PokeRoutineType.LinkTrade, context.User.Username, uniqueTradeID);
 
-        // Cooldown check (slash command — uses true ephemeral, auto-deletes after 15s)
+        // Cooldown check (slash command — uses true ephemeral)
         var discordCfg = SysCord<T>.Runner.Config.Discord;
         bool exempt = TradeCooldownTracker.IsExempt(context.User, discordCfg);
         if (discordCfg.TradeCooldownMinutes > 0 && !exempt
             && TradeCooldownTracker.IsOnCooldown(userID, discordCfg.TradeCooldownMinutes, out int minsLeft))
         {
             var cdEmbed = TradeCooldownTracker.BuildCooldownEmbed(minsLeft);
-            var sent = await context.Interaction.FollowupAsync(embed: cdEmbed, ephemeral: true).ConfigureAwait(false);
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(15000).ConfigureAwait(false);
-                try { await sent.DeleteAsync().ConfigureAwait(false); } catch { }
-            });
+            await context.Interaction.FollowupAsync(embed: cdEmbed, ephemeral: true).ConfigureAwait(false);
             return false;
         }
 

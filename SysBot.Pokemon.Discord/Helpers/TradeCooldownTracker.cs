@@ -60,7 +60,6 @@ public static class TradeCooldownTracker
                 "**Step 1:** [Become a Patron](https://www.patreon.com/c/pokedexmasters/membership)\n" +
                 "**Step 2:** Link your Discord account to Patreon to gain the **Premium** role.\n" +
                 "**Step 3:** All bots unlock automatically — trade as much as you want!")
-            .WithFooter("This message will disappear in 15 seconds.")
             .Build();
     }
 

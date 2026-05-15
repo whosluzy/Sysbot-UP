@@ -793,15 +793,6 @@ public static class QueueHelper<T> where T : PKM, new()
 
         try { await context.Message.DeleteAsync().ConfigureAwait(false); } catch { }
 
-        if (sent != null)
-        {
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(15000).ConfigureAwait(false);
-                try { await sent.DeleteAsync().ConfigureAwait(false); } catch { }
-            });
-        }
-
         return true;
     }
 
