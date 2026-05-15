@@ -123,9 +123,16 @@ public static class EmbedHelper
                 return;
             }
 
+            string friendlyHint = reason switch
+            {
+                var r when r.Contains("NoTrainerFound") => "\n\nMake Sure You Are Using Online Mode in Game on Link Trade",
+                var r when r.Contains("ExceptionInternal") => "\n\nPlease Contact an @Admin and Warn Them That The Bot is Down!",
+                _ => string.Empty,
+            };
+
             var embed = new EmbedBuilder()
                 .WithTitle("Trade Canceled...")
-                .WithDescription($"Your trade was canceled.\n**Reason**: {reason}")
+                .WithDescription($"Your trade was canceled.\n**Reason**: {reason}{friendlyHint}")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-uhoherror.gif")
                 .WithColor(Color.Red)
@@ -167,7 +174,7 @@ public static class EmbedHelper
 
             var embed = new EmbedBuilder()
                 .WithTitle("Here's your Link Trade Code!")
-                .WithDescription($"# {code:0000 0000}\n*I'll notify you when your trade starts!*")
+                .WithDescription($"# {code:0000 0000}\n*Insert This Code in Game But DO NOT Search Yet*")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-tradecode.gif")
                 .WithColor(Color.Gold)
@@ -296,8 +303,8 @@ public static class EmbedHelper
             }
 
             var embed = new EmbedBuilder()
-                .WithTitle($"Now Searching...")
-                .WithDescription($"**Waiting For**: {trainerName}\n**My IGN**: {inGameName}\n\n**Insert your Trade Code!**")
+                .WithTitle("Insert Trade Code in Game & Begin Searching")
+                .WithDescription($"**Waiting For**: {trainerName}\n**My IGN**: {inGameName}")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-nowsearching.gif")
                 .WithColor(Color.DarkGreen);
