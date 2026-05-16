@@ -121,10 +121,10 @@ namespace SysBot.Pokemon.Discord
                                 await entryStream.WriteAsync(pk.Data.ToArray());
 
                                 string speciesImageUrl = TradeExtensions<PK9>.PokeImg(pk, false, false);
-                                using var imageClient = new HttpClient();
-                                var imageBytes = await imageClient.GetByteArrayAsync(speciesImageUrl).ConfigureAwait(false);
 #pragma warning disable CA1416 // Validate platform compatibility
-                                var speciesImage = System.Drawing.Image.FromStream(new MemoryStream(imageBytes));
+                                var speciesImage = await Task.Run(() => System.Drawing.Image.FromStream(new HttpClient().GetStreamAsync(speciesImageUrl).Result)).ConfigureAwait(false);
+#pragma warning restore CA1416 // Validate platform compatibility
+#pragma warning disable CA1416 // Validate platform compatibility
                                 pokemonImages.Add(speciesImage);
 #pragma warning restore CA1416 // Validate platform compatibility
                             }
@@ -136,10 +136,7 @@ namespace SysBot.Pokemon.Discord
                         }
                     }
 
-                    using var combinedImage = CombineImages(pokemonImages);
-                    foreach (var img in pokemonImages)
-                        img.Dispose();
-                    pokemonImages.Clear();
+                    var combinedImage = CombineImages(pokemonImages);
 
                     memoryStream.Position = 0;
 
@@ -191,7 +188,7 @@ namespace SysBot.Pokemon.Discord
 
         private static async Task<string> GetPokePasteHtml(string pokePasteUrl)
         {
-            using var httpClient = new HttpClient();
+            var httpClient = new HttpClient();
             return await httpClient.GetStringAsync(pokePasteUrl);
         }
 

@@ -6,7 +6,7 @@ using Discord.WebSocket;
 
 namespace SysBot.Pokemon.Discord.Helpers
 {
-    public class DMRelayService : IDisposable
+    public class DMRelayService
     {
         private readonly DiscordSocketClient _client;
         private readonly ulong _forwardTargetId;
@@ -18,12 +18,6 @@ namespace SysBot.Pokemon.Discord.Helpers
 
             if (_forwardTargetId != 0)
                 _client.MessageReceived += HandleMessageAsync;
-        }
-
-        public void Dispose()
-        {
-            if (_forwardTargetId != 0)
-                _client.MessageReceived -= HandleMessageAsync;
         }
 
         private async Task HandleMessageAsync(SocketMessage msg)
