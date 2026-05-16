@@ -43,10 +43,7 @@ public class BotRunner<T> where T : class, IConsoleBotConfig
 
         if (callStop)
             match.Stop();
-        var removed = Bots.Remove(match);
-        if (removed)
-            match.Dispose();
-        return removed;
+        return Bots.Remove(match);
     }
 
     public virtual void ResumeAll()
