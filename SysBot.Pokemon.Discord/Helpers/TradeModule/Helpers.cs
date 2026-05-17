@@ -741,6 +741,7 @@ public static class Helpers<T> where T : PKM, new()
         // and either fall back to a HOME-converted shiny or force shiny on the
         // current PA9 via CommonEdits.SetShiny.
         // ============================================================================
+        LogUtil.LogInfo($"PA9 shiny check reached: pkm type={pkm?.GetType().Name}, set.Shiny={set.Shiny}, userRequestedShiny={userRequestedShiny}, IsShiny={pkm?.IsShiny}, la.Valid={la.Valid}", "Legality");
         if (pkm is PA9 pa9Shiny && (set.Shiny || userRequestedShiny) && !pa9Shiny.IsShiny && la.Valid)
         {
             LogUtil.LogInfo($"PA9 shiny fallback firing: set.Shiny={set.Shiny}, userRequestedShiny={userRequestedShiny}, species={pkm.Species}, form={pkm.Form}", "Legality");
