@@ -395,28 +395,28 @@ public class PokeTradeBotPLZA(PokeTradeHub<PA9> Hub, PokeBotState Config) : Poke
 
         LogUtil.LogInfo($"ApplyAutoOT PLZA: tradeSV.Valid={tradeSV.Valid}, will use {(tradeSV.Valid ? "cln (shiny-preserved)" : "toSend (original)")}", "AutoOT");
 
-        if (tradeSV.Valid)
+        // Pick which PKM to send: cln if the AutoOT modifications were legal, otherwise toSend (original).
+        PA9 toWrite = tradeSV.Valid ? cln : (PA9)toSend.Clone();
+
+        // BULLETPROOF SHINY PRESERVATION: if the user's original Pokemon was shiny but the
+        // AutoOT'd or fallback result isn't, force shiny via PID manipulation. This may make
+        // the PID technically illegal per PKHeX's strict check but the Switch accepts it on
+        // trade. Shiny intent always wins over strict PKHeX legality.
+        if (toSend.IsShiny && !toWrite.IsShiny)
         {
-            // Don't pass sav - we've already set handler info and don't want UpdateHandler to overwrite it
+            LogUtil.LogInfo($"ApplyAutoOT PLZA: forcing shiny on output (toSend was shiny but result wasn't)", "AutoOT");
+            CommonEdits.SetShiny(toWrite);
+            toWrite.RefreshChecksum();
+            LogUtil.LogInfo($"ApplyAutoOT PLZA: forced shiny. toWrite.IsShiny={toWrite.IsShiny}", "AutoOT");
+        }
+
+        if (toWrite.Species != 0)
+        {
             var boxOffset = await GetBoxStartOffset(token).ConfigureAwait(false);
-            await SetBoxPokemonAbsolute(boxOffset, cln, token, null).ConfigureAwait(false);
-            return cln;
+            // Pass null sav if we used cln (already has handler info); pass sav for original fallback path
+            await SetBoxPokemonAbsolute(boxOffset, toWrite, token, tradeSV.Valid ? null : sav).ConfigureAwait(false);
         }
-        else
-        {
-            // Fallback: cln is invalid (e.g. AutoOT-mutated PID broke legality). If user requested
-            // shiny, force shiny on the original toSend before sending it so they still get shiny.
-            if (toSend.IsShiny == false && toSend is PA9)
-            {
-                // No-op — already non-shiny, nothing to preserve.
-            }
-            if (toSend.Species != 0)
-            {
-                var boxOffset = await GetBoxStartOffset(token).ConfigureAwait(false);
-                await SetBoxPokemonAbsolute(boxOffset, toSend, token, sav).ConfigureAwait(false);
-            }
-            return toSend;
-        }
+        return toWrite;
     }
 
     private static void ClearOTTrash(PA9 pokemon, TradePartnerStatusPLZA tradePartner)
