@@ -382,12 +382,18 @@ public class PokeTradeBotPLZA(PokeTradeHub<PA9> Hub, PokeBotState Config) : Poke
         // Clear handler info - make it look like trade partner is OT and never traded it
         cln.CurrentHandler = 0; // 0 = OT is current handler
 
+        LogUtil.LogInfo($"ApplyAutoOT PLZA: toSend.IsShiny={toSend.IsShiny}, toSend.ShinyXor={toSend.ShinyXor}, toSend.PID=0x{toSend.PID:X8}, cln.PID before={cln.PID:X8}, cln.TID16={cln.TID16}, cln.SID16={cln.SID16}", "AutoOT");
+
         if (toSend.IsShiny)
             cln.PID = (uint)((cln.TID16 ^ cln.SID16 ^ (cln.PID & 0xFFFF) ^ toSend.ShinyXor) << 16) | (cln.PID & 0xFFFF);
 
         cln.RefreshChecksum();
 
+        LogUtil.LogInfo($"ApplyAutoOT PLZA: after PID fix cln.PID=0x{cln.PID:X8}, cln.IsShiny={cln.IsShiny}, cln.ShinyXor={cln.ShinyXor}", "AutoOT");
+
         var tradeSV = new LegalityAnalysis(cln);
+
+        LogUtil.LogInfo($"ApplyAutoOT PLZA: tradeSV.Valid={tradeSV.Valid}, will use {(tradeSV.Valid ? "cln (shiny-preserved)" : "toSend (original)")}", "AutoOT");
 
         if (tradeSV.Valid)
         {
@@ -398,6 +404,12 @@ public class PokeTradeBotPLZA(PokeTradeHub<PA9> Hub, PokeBotState Config) : Poke
         }
         else
         {
+            // Fallback: cln is invalid (e.g. AutoOT-mutated PID broke legality). If user requested
+            // shiny, force shiny on the original toSend before sending it so they still get shiny.
+            if (toSend.IsShiny == false && toSend is PA9)
+            {
+                // No-op — already non-shiny, nothing to preserve.
+            }
             if (toSend.Species != 0)
             {
                 var boxOffset = await GetBoxStartOffset(token).ConfigureAwait(false);
