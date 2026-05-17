@@ -847,12 +847,24 @@ public static class Helpers<T> where T : PKM, new()
                 if (new LegalityAnalysis(clone).Valid)
                 {
                     // Legal — apply the requested nature to both Nature and StatNature.
+                    bool shinyBefore = pk.IsShiny;
+                    bool cloneShiny = clone.IsShiny;
                     pk.Nature = clone.Nature;
                     pk.StatNature = clone.StatNature;
                     pk.RefreshChecksum();
                     LogUtil.LogInfo(
-                        $"{(Species)pk.Species}: Requested nature {requestedNature} is legal — applied.",
+                        $"{(Species)pk.Species}: Requested nature {requestedNature} is legal — applied. shinyBefore={shinyBefore} cloneShiny={cloneShiny} shinyAfter={pk.IsShiny}",
                         "ZANature");
+
+                    // If the nature change stripped shiny but the user requested shiny, restore it.
+                    if (shinyBefore && !pk.IsShiny && (set.Shiny || userRequestedShiny))
+                    {
+                        CommonEdits.SetShiny(pk);
+                        pk.RefreshChecksum();
+                        LogUtil.LogInfo(
+                            $"{(Species)pk.Species}: Re-applied shiny after nature change. IsShiny={pk.IsShiny}",
+                            "ZANature");
+                    }
                 }
                 else
                 {
