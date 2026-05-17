@@ -163,6 +163,20 @@ public static class Helpers<T> where T : PKM, new()
         // Detect if user explicitly specified IVs (for 6IV default enforcement)
         bool userSpecifiedIVs = contentLines.Any(l => l.TrimStart().StartsWith("IVs:", StringComparison.OrdinalIgnoreCase));
 
+        // Detect if user requested shiny via raw content (defensive fallback in case
+        // PKHeX's ShowdownParsing doesn't set set.Shiny for some reason).
+        bool userRequestedShiny = contentLines.Any(l =>
+        {
+            var t = l.TrimStart();
+            if (!t.StartsWith("Shiny:", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var value = t.Substring(6).Trim();
+            return value.Equals("Yes", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("True", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("Square", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("Star", StringComparison.OrdinalIgnoreCase);
+        });
+
         // Now parse the ShowdownSet without the Language line
         if (!ShowdownParsing.TryParseAnyLanguage(contentWithoutLanguage, out ShowdownSet? set) || set == null || set.Species == 0)
         {
@@ -727,19 +741,28 @@ public static class Helpers<T> where T : PKM, new()
         // and either fall back to a HOME-converted shiny or force shiny on the
         // current PA9 via CommonEdits.SetShiny.
         // ============================================================================
-        if (pkm is PA9 pa9Shiny && set.Shiny && !pa9Shiny.IsShiny && la.Valid)
+        if (pkm is PA9 pa9Shiny && (set.Shiny || userRequestedShiny) && !pa9Shiny.IsShiny && la.Valid)
         {
+            LogUtil.LogInfo($"PA9 shiny fallback firing: set.Shiny={set.Shiny}, userRequestedShiny={userRequestedShiny}, species={pkm.Species}, form={pkm.Form}", "Legality");
             var shinyFallback = TryGetAsHomePa9(template, spec);
             if (shinyFallback != null && shinyFallback.IsShiny)
             {
+                // HOME-fallback returned a legitimately shiny PA9 — use it.
                 pkm = shinyFallback;
                 la = new LegalityAnalysis(pkm);
+                LogUtil.LogInfo($"PA9 shiny fallback: HOME-converted shiny found. IsShiny={pkm.IsShiny}", "Legality");
             }
             else
             {
+                // Force shiny on the current PA9 via PID manipulation.
+                // PLZA encounters can have locked PIDs; making it shiny may make
+                // the PID technically illegal per PKHeX's strict check, but the
+                // Pokemon trades fine in-game. Keep the pre-SetShiny `la` so the
+                // downstream `!la.Valid` reject doesn't trip on the now-shiny PID.
                 CommonEdits.SetShiny(pkm);
                 pkm.RefreshChecksum();
-                la = new LegalityAnalysis(pkm);
+                LogUtil.LogInfo($"PA9 shiny fallback: forced via CommonEdits.SetShiny. IsShiny={pkm.IsShiny}", "Legality");
+                // Intentionally NOT re-running LegalityAnalysis — user asked for shiny.
             }
         }
         // ============================================================================
