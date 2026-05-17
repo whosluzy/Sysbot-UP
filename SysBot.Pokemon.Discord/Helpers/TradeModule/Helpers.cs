@@ -717,6 +717,35 @@ public static class Helpers<T> where T : PKM, new()
         // END OF PA9 CROSS-GAME HOME FALLBACK
         // ============================================================================
 
+        // ============================================================================
+        // PA9 SHINY FALLBACK
+        // ============================================================================
+        // The PA9 HOME fallback above only runs when la.Valid is false. But ALM
+        // can produce a VALID PA9 that simply isn't shiny when the user requested
+        // shiny — PLZA's encounter pool has limited shiny support, so ALM may
+        // return a perfectly legal non-shiny instead of failing. Detect that case
+        // and either fall back to a HOME-converted shiny or force shiny on the
+        // current PA9 via CommonEdits.SetShiny.
+        // ============================================================================
+        if (pkm is PA9 pa9Shiny && set.Shiny && !pa9Shiny.IsShiny && la.Valid)
+        {
+            var shinyFallback = TryGetAsHomePa9(template, spec);
+            if (shinyFallback != null && shinyFallback.IsShiny)
+            {
+                pkm = shinyFallback;
+                la = new LegalityAnalysis(pkm);
+            }
+            else
+            {
+                CommonEdits.SetShiny(pkm);
+                pkm.RefreshChecksum();
+                la = new LegalityAnalysis(pkm);
+            }
+        }
+        // ============================================================================
+        // END OF PA9 SHINY FALLBACK
+        // ============================================================================
+
 
         if (pkm is not T pk || !la.Valid)
         {
