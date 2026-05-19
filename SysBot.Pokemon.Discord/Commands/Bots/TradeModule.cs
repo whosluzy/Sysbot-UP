@@ -1165,7 +1165,7 @@ public partial class TradeModule<T> : ModuleBase<SocketCommandContext> where T :
                 $"{Context.User.Mention} Processing your archive & extracting files..."
             );
 
-            tempDir = Path.Combine(Path.GetTempPath(), $"PokedexMasterBot_BTZ_{Guid.NewGuid()}");
+            tempDir = Path.Combine(Path.GetTempPath(), $"FusionBot_BTZ_{Guid.NewGuid()}");
             Directory.CreateDirectory(tempDir);
 
             var safeName = Path.GetFileName(attachment.Filename);

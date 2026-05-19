@@ -389,26 +389,22 @@ public class PokeTradeBotPLZA(PokeTradeHub<PA9> Hub, PokeBotState Config) : Poke
 
         var tradeSV = new LegalityAnalysis(cln);
 
-        // Pick which PKM to send: cln if AutoOT changes are legal, otherwise toSend (original).
-        PA9 toWrite = tradeSV.Valid ? cln : (PA9)toSend.Clone();
-
-        // BULLETPROOF SHINY PRESERVATION: if the user requested shiny but the result isn't shiny
-        // (e.g. AutoOT's new TID/SID broke the shiny calculation against the same PID), force it
-        // shiny via PID manipulation. Trades go through fine on the Switch even if the PID is
-        // technically illegal by PKHeX's strict check.
-        if (toSend.IsShiny && !toWrite.IsShiny)
+        if (tradeSV.Valid)
         {
-            CommonEdits.SetShiny(toWrite);
-            toWrite.RefreshChecksum();
-        }
-
-        if (toWrite.Species != 0)
-        {
+            // Don't pass sav - we've already set handler info and don't want UpdateHandler to overwrite it
             var boxOffset = await GetBoxStartOffset(token).ConfigureAwait(false);
-            // Don't pass sav for cln (already has handler info); pass sav for original fallback path
-            await SetBoxPokemonAbsolute(boxOffset, toWrite, token, tradeSV.Valid ? null : sav).ConfigureAwait(false);
+            await SetBoxPokemonAbsolute(boxOffset, cln, token, null).ConfigureAwait(false);
+            return cln;
         }
-        return toWrite;
+        else
+        {
+            if (toSend.Species != 0)
+            {
+                var boxOffset = await GetBoxStartOffset(token).ConfigureAwait(false);
+                await SetBoxPokemonAbsolute(boxOffset, toSend, token, sav).ConfigureAwait(false);
+            }
+            return toSend;
+        }
     }
 
     private static void ClearOTTrash(PA9 pokemon, TradePartnerStatusPLZA tradePartner)

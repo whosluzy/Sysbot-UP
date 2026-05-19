@@ -235,7 +235,7 @@ namespace SysBot.Pokemon.WinForms
             lblTitle.Name = "lblTitle";
             lblTitle.Size = new Size(220, 32);
             lblTitle.TabIndex = 4;
-            lblTitle.Text = "PokedexMasterBot | v0.0.0 | MODE: None";
+            lblTitle.Text = "FusionBot | v0.0.0 | MODE: None";
             lblTitle.TextAlign = ContentAlignment.MiddleCenter;
             // 
             // panel4
@@ -400,7 +400,7 @@ namespace SysBot.Pokemon.WinForms
             MinimumSize = new Size(800, 422);
             Name = "Main";
             StartPosition = FormStartPosition.CenterScreen;
-            Text = "PokedexMasterBot";
+            Text = "FusionBot";
             panelLeftSide.ResumeLayout(false);
             panelImageLogo.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)pictureLogo).EndInit();
@@ -416,10 +416,21 @@ namespace SysBot.Pokemon.WinForms
         }
 
         private void panelTitleBar_Paint(object sender, PaintEventArgs e)
+{
+    // Draw the existing image first
+    if (panelTitleBar.BackgroundImage != null)
+        e.Graphics.DrawImage(panelTitleBar.BackgroundImage, 0, 0, panelTitleBar.Width, panelTitleBar.Height);
+
+    // Draw sparkles
+    foreach (var sp in sparkles)
+    {
+        int alpha = (int)(255 * (float)sp.Life / sp.MaxLife);
+        using (Brush brush = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
         {
-            if (panelTitleBar.BackgroundImage != null)
-                e.Graphics.DrawImage(panelTitleBar.BackgroundImage, 0, 0, panelTitleBar.Width, panelTitleBar.Height);
+            e.Graphics.FillEllipse(brush, sp.Position.X, sp.Position.Y, sp.Size, sp.Size);
         }
+    }
+}
 
 
         #endregion

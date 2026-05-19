@@ -168,12 +168,6 @@ public class DiscordSettings
     [Category(Roles), Description("Users with this role are allowed to bypass command restrictions."), DisplayName("Allowed Sudo Roles")]
     public RemoteControlAccessList RoleSudo { get; set; } = new() { AllowIfEmpty = false };
 
-    [Category(Operation), Description("Minutes a user must wait between successful trade requests. Set to 0 to disable."), DisplayName("Trade Cooldown (Minutes)")]
-    public int TradeCooldownMinutes { get; set; } = 10;
-
-    [Category(Roles), Description("Users with any of these roles bypass the trade cooldown. Add role IDs or role names."), DisplayName("Roles Exempt From Cooldown")]
-    public RemoteControlAccessList RolesExemptFromCooldown { get; set; } = new() { AllowIfEmpty = false };
-
     // Operation
     [Category(Servers), Description("Servers with these IDs will not be able to use the bot, and it will leave the server."), DisplayName("Server Blacklist")]
     public RemoteControlAccessList ServerBlacklist { get; set; } = new() { AllowIfEmpty = false };
@@ -187,6 +181,12 @@ public class DiscordSettings
     // Startup
     [Category(Users), Description("Users with these user IDs cannot use the bot."), DisplayName("User Blacklist")]
     public RemoteControlAccessList UserBlacklist { get; set; } = new();
+
+    [Category(Operation), Description("Minutes a user must wait between trades. Set to 0 to disable."), DisplayName("Trade Cooldown (Minutes)")]
+    public int TradeCooldownMinutes { get; set; } = 10;
+
+    [Category(Roles), Description("Users with these roles bypass the trade cooldown."), DisplayName("Roles Exempt From Cooldown")]
+    public RemoteControlAccessList RolesExemptFromCooldown { get; set; } = new();
 
     public override string ToString() => "Discord Integration Settings";
 

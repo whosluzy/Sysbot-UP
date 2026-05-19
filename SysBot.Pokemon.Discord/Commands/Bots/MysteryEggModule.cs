@@ -316,7 +316,8 @@ namespace SysBot.Pokemon.Discord
                 .WithFooter($"Batch Trade {eggNumber} of {totalEggs}" + (eggNumber == 1 ? $" | Position: {queuePosition}" : ""))
                 .WithAuthor(new EmbedAuthorBuilder()
                     .WithName($"Mystery Egg for {context.User.Username}")
-                    .WithIconUrl(context.User.GetAvatarUrl() ?? context.User.GetDefaultAvatarUrl()));
+                    .WithIconUrl(context.User.GetAvatarUrl() ?? context.User.GetDefaultAvatarUrl())
+                    .WithUrl("https://zepkm.com/pokecreator"));
 
             return embedBuilder.Build();
         }

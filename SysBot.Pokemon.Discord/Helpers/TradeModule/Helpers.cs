@@ -1428,7 +1428,8 @@ public static class Helpers<T> where T : PKM, new()
 
         if (Info.Hub.Config.Legality.DisallowNonNatives && isNonNative)
         {
-            _ = await context.Channel.SendMessageAsync("This Build is Not Legally Possible in Game! Try again.\n\nHint: The level might be too low or something in your request does not belong *in this game*.").ConfigureAwait(false);
+            string speciesName = SpeciesName.GetSpeciesName(pk!.Species, (int)LanguageID.English);
+            _ = await context.Channel.SendMessageAsync($"This **{speciesName}** is not native to this game, and cannot be traded! Trade with the correct bot, then trade to HOME.").ConfigureAwait(false);
             return;
         }
 

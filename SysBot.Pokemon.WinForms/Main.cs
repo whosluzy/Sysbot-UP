@@ -56,6 +56,7 @@ namespace SysBot.Pokemon.WinForms
         private IconButton currentBtn = null!;
 
         private Panel leftBorderBtn = null!;
+        private Dictionary<IconButton, Timer> hoverTimers = new();
 
 #pragma warning disable CS0414 // Field is assigned but never used
         private bool _isFormLoading = true;               // Flag to indicate if the form is still loading (reserved for future use)
@@ -66,6 +67,101 @@ namespace SysBot.Pokemon.WinForms
         private HubForm _hubForm = null!;                       // HubForm instance to manage hub settings
 
         public Panel PanelLeftSide => panelLeftSide;      // Expose panelLeftSide for other forms
+
+        // UI EFFECTS VARIABLES
+        private Dictionary<IconButton, Timer> pulseTimers = new();
+        private readonly Dictionary<Control, Timer> shakeTimers = new();
+        private readonly Dictionary<Control, int> shakeFrames = new();
+        private readonly Dictionary<Control, Point> originalLocations = new();
+        private readonly Random rng = new();
+        private readonly List<Sparkle> sparkles = new();
+        private readonly List<Sparkle> logoSparkles = new();
+        private readonly Random glitterRng = new Random();
+        private Timer glitterTimer = null!;
+
+        // Neon pink + neon blue palette for the logo panel sparkles
+        private static readonly Color[] NeonLogoPalette = new[]
+        {
+            Color.FromArgb(255, 255, 20, 200),   // neon pink
+            Color.FromArgb(255, 255, 80, 220),   // lighter neon pink
+            Color.FromArgb(255, 0, 200, 255),    // neon blue / cyan
+            Color.FromArgb(255, 90, 140, 255),   // lighter neon blue
+        };
+
+        // Per-mode palettes for the title-bar sparkles
+        private static readonly Color[] TitleBarPalette_PLZA = new[]
+        {
+            Color.FromArgb(255, 80, 190, 140),   // darker mint
+            Color.FromArgb(255, 120, 215, 170),  // medium mint
+            Color.FromArgb(255, 255, 255, 255),  // white
+        };
+        private static readonly Color[] TitleBarPalette_LGPE = new[]
+        {
+            Color.FromArgb(255, 180, 220, 255),  // light baby blue
+            Color.FromArgb(255, 255, 200, 220),  // light baby pink
+        };
+        private static readonly Color[] TitleBarPalette_SV = new[]
+        {
+            Color.FromArgb(255, 190, 60, 255),   // neon purple
+            Color.FromArgb(255, 215, 110, 255),  // lighter neon purple
+            Color.FromArgb(255, 255, 130, 130),  // light red
+        };
+        private static readonly Color[] TitleBarPalette_LA = new[]
+        {
+            Color.FromArgb(255, 255, 255, 255),  // white
+            Color.FromArgb(255, 255, 215, 110),  // gold
+            Color.FromArgb(255, 255, 235, 170),  // soft gold
+        };
+        private static readonly Color[] TitleBarPalette_BDSP = new[]
+        {
+            Color.FromArgb(255, 80, 110, 170),   // matte blue
+            Color.FromArgb(255, 140, 70, 110),   // matte maroon-purple
+        };
+        private static readonly Color[] TitleBarPalette_SWSH = new[]
+        {
+            Color.FromArgb(255, 40, 100, 200),   // SWSH blue
+            Color.FromArgb(255, 220, 50, 60),    // SWSH red
+        };
+
+        private Color[]? GetTitleBarPalette() => Config?.Mode switch
+        {
+            ProgramMode.PLZA => TitleBarPalette_PLZA,
+            ProgramMode.LGPE => TitleBarPalette_LGPE,
+            ProgramMode.SV   => TitleBarPalette_SV,
+            ProgramMode.LA   => TitleBarPalette_LA,
+            ProgramMode.BDSP => TitleBarPalette_BDSP,
+            ProgramMode.SWSH => TitleBarPalette_SWSH,
+            _ => null, // null falls back to Sparkle's default white/yellow
+        };
+
+        // Parse "R, G, B" / "R G B" / "R;G;B" into a Color. Returns null on bad/empty input.
+        private static Color? ParseRgbColor(string? input)
+        {
+            if (string.IsNullOrWhiteSpace(input))
+                return null;
+            var parts = input.Split(new[] { ',', ' ', ';' },
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length != 3)
+                return null;
+            if (!byte.TryParse(parts[0], out var r)) return null;
+            if (!byte.TryParse(parts[1], out var g)) return null;
+            if (!byte.TryParse(parts[2], out var b)) return null;
+            return Color.FromArgb(255, r, g, b);
+        }
+
+        // Returns the user's overridden logo sparkle palette, or the default neon palette.
+        // One blank + one valid = single-color palette; both blank/invalid = default.
+        private Color[] GetLogoPalette()
+        {
+            var hub = Config?.Hub;
+            var c1 = ParseRgbColor(hub?.BotLogoSparkleColor1);
+            var c2 = ParseRgbColor(hub?.BotLogoSparkleColor2);
+
+            if (c1.HasValue && c2.HasValue) return new[] { c1.Value, c2.Value };
+            if (c1.HasValue) return new[] { c1.Value };
+            if (c2.HasValue) return new[] { c2.Value };
+            return NeonLogoPalette;
+        }
 
         ////////////////////////////////////////////////////////////
         // Initialize custom fonts for UI controls with fallbacks //
@@ -178,6 +274,7 @@ namespace SysBot.Pokemon.WinForms
             pictureLogo.Image = Resources.picture_logo; // load logo from PNG resource (kept out of Main.resx to avoid IUIService build notice)
             SetupTitleBarButtonHoverEffects();
             panelTitleBar.Paint += panelTitleBar_Paint;
+            InitGlitter();
 
             Instance = this;
             InitializeLeftSideImage(); // Initialize the left side BG image in panelLeftSide
@@ -195,6 +292,8 @@ namespace SysBot.Pokemon.WinForms
             this.Load += async (s, e) => await InitializeAsync();
 
             // Set up left‑panel buttons & effects
+            var baseColor = ThemeManager.CurrentColors.PanelBase; // Base color for buttons according to themes
+            var hoverColor = ThemeManager.CurrentColors.Hover;    // Hover color for buttons according to themes
             leftBorderBtn = new Panel { Size = new Size(7, 60) }; // Left border for active button
             panelLeftSide.Controls.Add(leftBorderBtn);            // Add left border to the panel
             panelTitleBar.MouseDown += panelTitleBar_MouseDown;   // Allow dragging the window from the title bar
@@ -286,7 +385,7 @@ namespace SysBot.Pokemon.WinForms
             }
             // Load other form shit and/or save valuable shit to config
             LoadControls();
-            Text = $"{(string.IsNullOrEmpty(Config.Hub.BotName) ? "PokedexMasterBot |" : Config.Hub.BotName)} {TradeBot.Version} | Mode: {Config.Mode}";
+            Text = $"{(string.IsNullOrEmpty(Config.Hub.BotName) ? "FusionBot |" : Config.Hub.BotName)} {TradeBot.Version} | Mode: {Config.Mode}";
             UpdateBackgroundImage(Config.Mode);        // Call the method to update image in leftSidePanel
             UpdateUpperImage(Config.Mode);        // Call the method to update image in panelTitleBar
             LoadThemeOptions();
@@ -408,7 +507,7 @@ namespace SysBot.Pokemon.WinForms
                 {
                     Invoke((Action)(() =>
                     {
-                        Text = $"{(string.IsNullOrEmpty(Config.Hub.BotName) ? "PokedexMasterBot |" : Config.Hub.BotName)} {TradeBot.Version} | Mode: {newMode}";
+                        Text = $"{(string.IsNullOrEmpty(Config.Hub.BotName) ? "FusionBot |" : Config.Hub.BotName)} {TradeBot.Version} | Mode: {newMode}";
                         lblTitle.Text = Text;
                         UpdateBackgroundImage(newMode);
                         UpdateUpperImage(newMode);
@@ -507,7 +606,7 @@ namespace SysBot.Pokemon.WinForms
                     string? dirPath = Path.GetDirectoryName(exePath);
                     if (!string.IsNullOrEmpty(dirPath))
                     {
-                        string portInfoPath = Path.Combine(dirPath, $"PokedexMasterBot_{Environment.ProcessId}.port");
+                        string portInfoPath = Path.Combine(dirPath, $"FusionBot_{Environment.ProcessId}.port");
                         if (File.Exists(portInfoPath))
                             File.Delete(portInfoPath);
                     }
@@ -1133,21 +1232,35 @@ namespace SysBot.Pokemon.WinForms
         }
 
         // Method and logic to open the child form(Bots, Hub, or Logs) in panelMain
-        private void OpenChildForm(Form childForm)
+        private async void OpenChildForm(Form childForm)
         {
-            activeForm?.Hide();
-            activeForm = childForm;
+            activeForm?.Hide(); // Hide the currently active form, if any
+            activeForm = childForm; // Set the new active form
 
+            // If the form is not already in the panel, add it
             if (!panelMain.Controls.Contains(childForm))
             {
-                childForm.TopLevel = false;
-                childForm.FormBorderStyle = FormBorderStyle.None;
-                panelMain.Controls.Add(childForm);
+                childForm.TopLevel = false; // Set the form to be a non-top-level form
+                childForm.FormBorderStyle = FormBorderStyle.None; // Remove the border style
+                panelMain.Controls.Add(childForm); // Add the form to the panelMain controls
+            }
+
+            childForm.Dock = DockStyle.None; // needed for slide
+            childForm.Size = panelMain.ClientSize; // set size to panel size
+            childForm.Left = panelMain.ClientSize.Width; // reset slide start
+            childForm.Opacity = 0; // reset fade start
+            childForm.Show(); // Show the form
+            childForm.BringToFront(); // Bring the form to the front of panelMain
+
+            // Slide/fade animation
+            while (childForm.Left > 0 || childForm.Opacity < 1)
+            {
+                await Task.Delay(10);
+                childForm.Left = Math.Max(childForm.Left - 40, 0);
+                childForm.Opacity = Math.Min(childForm.Opacity + 0.05, 1);
             }
 
             childForm.Dock = DockStyle.Fill;
-            childForm.Show();
-            childForm.BringToFront();
         }
 
 
@@ -1168,10 +1281,16 @@ namespace SysBot.Pokemon.WinForms
                 btn.FlatStyle = FlatStyle.Flat;
                 btn.FlatAppearance.BorderSize = 0;
 
-                btn.MouseEnter += (s, e) => btn.BackColor = colors.Shadow;
-                btn.MouseLeave += (s, e) => btn.BackColor = colors.PanelBase;
+                // Hover animations
+                btn.MouseEnter += (s, e) => StartHoverFade(btn, colors.Shadow, 150);
+                btn.MouseLeave += (s, e) => StartHoverFade(btn, colors.PanelBase);
 
-                btn.Click += (s, e) => ActivateButton(btn);
+                // Click effects
+                btn.Click += (s, e) =>
+                {
+                    ActivateButton(btn);
+                    FlashClick(btn);
+                };
             }
         }
 
@@ -1194,8 +1313,11 @@ namespace SysBot.Pokemon.WinForms
                 _ => Color.White
             };
 
-            btn.FlatAppearance.BorderSize = 1;
+            btn.FlatAppearance.BorderSize = 1; // thinner outline
             btn.FlatAppearance.BorderColor = outlineColor;
+
+            // START the glow pulse on the active button
+            StartOutlinePulse(btn, outlineColor);
 
             // Update top panel
             lblTitleChildForm.Text = btn.Text;
@@ -1203,6 +1325,130 @@ namespace SysBot.Pokemon.WinForms
             childFormIcon.IconColor = outlineColor;
         }
 
+
+        // Method to slide and fade in the child forms (Bots, Hub, Logs) when it is opened
+        private async void SlideFadeInForm(Form form)
+        {
+            form.Dock = DockStyle.None;                               // Remove any docking style from the form
+            form.Size = panelMain.ClientSize;                         // Set the size of the form to match the panelMain size to make a seamless transition
+            form.Location = new Point(panelMain.ClientSize.Width, 0); // Set the initial location of the form to the right edge of the panelMain
+            form.Opacity = 0;                                         // Set the initial opacity of the form to 0 (invisible)
+            form.Show();                                              // Show the form in all its glory
+
+            // Slide the form to the left and increase its opacity
+            while (form.Left > 0 || form.Opacity < 1.0) // While the form is not fully visible
+            {
+                await Task.Delay(10);                              // Wait for 10 milliseconds for smoother animation
+                form.Left = Math.Max(form.Left - 40, 0);           // Move the form left by 40 pixels, but not less than 0
+                form.Opacity = Math.Min(form.Opacity + 0.05, 1.0); // Increase the opacity of the form by 0.05, but not more than 1.0 (fully visible)
+            }
+            form.Dock = DockStyle.Fill; // Set the form to fill the entire panelMain like it should
+            form.BringToFront();        // Bring the form to the front of panelMain
+        }
+
+        // Smooth hover fade
+        private void StartHoverFade(IconButton btn, Color targetColor, int durationMs = 200)
+        {
+            if (hoverTimers.ContainsKey(btn))
+            {
+                hoverTimers[btn].Stop();
+                hoverTimers[btn].Dispose();
+                hoverTimers.Remove(btn);
+            }
+
+            Color startColor = btn.BackColor;
+            int steps = durationMs / 10; // ~60 FPS
+            int currentStep = 0;
+
+            Timer timer = new Timer { Interval = 26 };
+            timer.Tick += (s, e) =>
+            {
+                currentStep++;
+                float t = EaseInOut((float)currentStep / steps);
+                btn.BackColor = LerpColor(startColor, targetColor, t);
+
+                if (currentStep >= steps)
+                {
+                    timer.Stop();
+                    timer.Dispose();
+                    hoverTimers.Remove(btn);
+                }
+            };
+
+            hoverTimers[btn] = timer;
+            timer.Start();
+        }
+
+        private void StartOutlinePulse(IconButton btn, Color baseColor)
+        {
+            // stop any existing pulse first
+            if (pulseTimers.TryGetValue(btn, out var oldTimer))
+            {
+                oldTimer.Stop();
+                oldTimer.Dispose();
+                pulseTimers.Remove(btn);
+            }
+
+            float t = 0f;
+            bool forward = true;
+
+            Timer pulseTimer = new Timer { Interval = 16 }; // ~60 FPS
+            pulseTimer.Tick += (s, e) =>
+            {
+                // update t
+                t += forward ? 0.03f : -0.03f;
+                if (t >= 1f) { t = 1f; forward = false; }
+                if (t <= 0f) { t = 0f; forward = true; }
+
+                // calculate new color, clamp to 0-255
+                int Clamp(int val) => Math.Max(0, Math.Min(255, val));
+                float intensity = 0.6f + 0.4f * t; // base 60% -> 100%
+                btn.FlatAppearance.BorderColor = Color.FromArgb(
+                    Clamp((int)(baseColor.R * intensity)),
+                    Clamp((int)(baseColor.G * intensity)),
+                    Clamp((int)(baseColor.B * intensity))
+                 );
+            };
+
+            pulseTimer.Start();
+            pulseTimers[btn] = pulseTimer;
+        }
+
+        // Call this when disabling a button
+        private void StopOutlinePulse(IconButton btn)
+        {
+            if (pulseTimers.TryGetValue(btn, out var timer))
+            {
+                timer.Stop();
+                timer.Dispose();
+                pulseTimers.Remove(btn);
+            }
+            // reset outline color
+            btn.FlatAppearance.BorderColor = ThemeManager.CurrentColors.PanelBase;
+        }
+
+        // Click flash animation
+        private async void FlashClick(IconButton btn)
+        {
+            Color flashColor = ThemeManager.CurrentColors.Shadow;
+            Color original = btn.BackColor;
+
+            btn.BackColor = flashColor;
+            await Task.Delay(100); // quick flash
+            btn.BackColor = original;
+        }
+
+        // Smooth color interpolation
+        private Color LerpColor(Color start, Color end, float t)
+        {
+            int r = (int)(start.R + (end.R - start.R) * t);
+            int g = (int)(start.G + (end.G - start.G) * t);
+            int b = (int)(start.B + (end.B - start.B) * t);
+            return Color.FromArgb(r, g, b);
+        }
+
+        // Easing function for smooth transitions
+        private float EaseInOut(float t) => t < 0.5f ? 4 * t * t * t : 1 - MathF.Pow(-2 * t + 2, 3) / 2;
 
         private void SetupTitleBarButtonHoverEffects()
         {
@@ -1229,13 +1475,76 @@ namespace SysBot.Pokemon.WinForms
             btnMinimize.MouseLeave += (s, e) => btnMinimize.IconColor = normalMinimize;
         }
 
+        private void InitGlitter()
+        {
+            glitterTimer = new Timer { Interval = 33 }; // ~30 FPS
+            glitterTimer.Tick += (s, e) =>
+            {
+                // Randomly spawn new title-bar sparkles (color follows current game mode)
+                if (glitterRng.NextDouble() < 0.2) // 20% chance each tick
+                {
+                    PointF pos = new PointF(
+                        glitterRng.Next(panelTitleBar.Width),
+                        glitterRng.Next(panelTitleBar.Height)
+                    );
+                    sparkles.Add(new Sparkle(pos, GetTitleBarPalette()));
+                }
+
+                // Update existing title-bar sparkles
+                for (int i = sparkles.Count - 1; i >= 0; i--)
+                {
+                    if (sparkles[i].Tick())
+                        sparkles.RemoveAt(i);
+                }
+
+                // Randomly spawn new logo-panel sparkles (neon pink/blue)
+                if (panelImageLogo.Width > 0 && panelImageLogo.Height > 0
+                    && glitterRng.NextDouble() < 0.25) // slightly denser since the area is smaller
+                {
+                    PointF pos = new PointF(
+                        glitterRng.Next(panelImageLogo.Width),
+                        glitterRng.Next(panelImageLogo.Height)
+                    );
+                    logoSparkles.Add(new Sparkle(pos, GetLogoPalette()));
+                }
+
+                // Update existing logo-panel sparkles
+                for (int i = logoSparkles.Count - 1; i >= 0; i--)
+                {
+                    if (logoSparkles[i].Tick())
+                        logoSparkles.RemoveAt(i);
+                }
+
+                // Redraw panels
+                panelTitleBar.Invalidate();
+                panelImageLogo.Invalidate(true); // invalidate children so transparent pictureLogo refreshes
+            };
+
+            glitterTimer.Start();
+
+            FormClosed += (_, __) => { glitterTimer.Stop(); glitterTimer.Dispose(); };
+
+            // Paint handlers
+            panelTitleBar.Paint += (s, e) =>
+            {
+                foreach (var sp in sparkles)
+                    sp.Draw(e.Graphics);
+            };
+
+            panelImageLogo.Paint += (s, e) =>
+            {
+                foreach (var sp in logoSparkles)
+                    sp.Draw(e.Graphics);
+            };
+        }
+
         // Method to disable the current button and reset its style to default
         private void DisableButton()
         {
             if (currentBtn != null)
             {
-                currentBtn.FlatAppearance.BorderColor = ThemeManager.CurrentColors.PanelBase;
-                currentBtn.BackColor = ThemeManager.CurrentColors.PanelBase;
+                StopOutlinePulse(currentBtn); // STOP pulse animation
+                currentBtn.BackColor = ThemeManager.CurrentColors.PanelBase; // default bg
                 currentBtn.TextAlign = ContentAlignment.MiddleLeft;
                 currentBtn.TextImageRelation = TextImageRelation.ImageBeforeText;
                 currentBtn.ImageAlign = ContentAlignment.MiddleLeft;

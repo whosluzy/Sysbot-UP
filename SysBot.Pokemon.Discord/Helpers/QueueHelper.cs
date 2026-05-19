@@ -130,11 +130,7 @@ public static class QueueHelper<T> where T : PKM, new()
         var hub = SysCord<T>.Runner.Hub;
         var Info = hub.Queues.Info;
         var isSudo = sig == RequestSignificance.Owner;
-
         var added = Info.AddToTradeQueue(trade, userID, false, isSudo);
-
-        if (added == QueueResultAdd.Added)
-            RecordCooldownIfApplicable(trader, userID);
 
         // Start queue position updates for Discord notification
         if (added != QueueResultAdd.AlreadyInQueue && added != QueueResultAdd.NotAllowedItem && notifier is DiscordTradeNotifier<T> discordNotifier)
@@ -221,7 +217,7 @@ public static class QueueHelper<T> where T : PKM, new()
                 footerText += $"\n{userDetailsText}";
             }
             footerText += $"\n{etaMessage}";
-            footerText += $"\nPokedexMasterBot {TradeBot.Version}";
+            footerText += $"\nFusionBot {TradeBot.Version}";
 
             var embedBuilder = new EmbedBuilder()
                 .WithColor(embedColor)
@@ -229,7 +225,8 @@ public static class QueueHelper<T> where T : PKM, new()
                 .WithFooter(footerText)
                 .WithAuthor(new EmbedAuthorBuilder()
                     .WithName(embedData.AuthorName)
-                    .WithIconUrl(trader.GetAvatarUrl() ?? trader.GetDefaultAvatarUrl()));
+                    .WithIconUrl(trader.GetAvatarUrl() ?? trader.GetDefaultAvatarUrl())
+                    .WithUrl("https://zepkm.com/pokecreator"));
 
             DetailsExtractor<T>.AddAdditionalText(embedBuilder);
 
@@ -461,7 +458,8 @@ public static class QueueHelper<T> where T : PKM, new()
                         .WithFooter(footerText)
                         .WithAuthor(new EmbedAuthorBuilder()
                             .WithName(embedData.AuthorName)
-                            .WithIconUrl(trader.GetAvatarUrl() ?? trader.GetDefaultAvatarUrl()));
+                            .WithIconUrl(trader.GetAvatarUrl() ?? trader.GetDefaultAvatarUrl())
+                            .WithUrl("https://zepkm.com/pokecreator"));
 
                     DetailsExtractor<T>.AddAdditionalText(embedBuilder);
                     DetailsExtractor<T>.AddNormalTradeFields(embedBuilder, embedData, trader.Mention, pk);
@@ -602,7 +600,7 @@ public static class QueueHelper<T> where T : PKM, new()
                 if (!string.IsNullOrEmpty(userDetailsText))
                     footerText += $"\n{userDetailsText}";
                 footerText += $"\nWait Estimate: {baseEta:F1} min(s) for batch";
-                footerText += $"\nPokedexMasterBot {TradeBot.Version}";
+                footerText += $"\nFusionBot {TradeBot.Version}";
 
                 var embedBuilder = new EmbedBuilder()
                     .WithColor(DiscordColor.Gold)
@@ -611,7 +609,8 @@ public static class QueueHelper<T> where T : PKM, new()
                     .WithFooter(footerText)
                     .WithAuthor(new EmbedAuthorBuilder()
                         .WithName($"{trader.Username}'s Mystery Egg Batch Trade")
-                        .WithIconUrl(trader.GetAvatarUrl() ?? trader.GetDefaultAvatarUrl()));
+                        .WithIconUrl(trader.GetAvatarUrl() ?? trader.GetDefaultAvatarUrl())
+                        .WithUrl("https://zepkm.com/pokecreator"));
 
                 DetailsExtractor<T>.AddAdditionalText(embedBuilder);
 
@@ -733,7 +732,7 @@ public static class QueueHelper<T> where T : PKM, new()
                 if (!string.IsNullOrEmpty(userDetailsText))
                     footerText += $"\n{userDetailsText}";
                 footerText += $"\nWait Estimate: {baseEta:F1} min(s) for batch";
-                footerText += $"\nPokedexMasterBot {TradeBot.Version}";
+                footerText += $"\nFusionBot {TradeBot.Version}";
 
                 var embedBuilder = new EmbedBuilder()
                     .WithColor(DiscordColor.Gold)
@@ -743,7 +742,8 @@ public static class QueueHelper<T> where T : PKM, new()
                     .WithFooter(footerText)
                     .WithAuthor(new EmbedAuthorBuilder()
                         .WithName($"{trader.Username}'s Item Batch Trade")
-                        .WithIconUrl(trader.GetAvatarUrl() ?? trader.GetDefaultAvatarUrl()));
+                        .WithIconUrl(trader.GetAvatarUrl() ?? trader.GetDefaultAvatarUrl())
+                        .WithUrl("https://zepkm.com/pokecreator"));
 
                 DetailsExtractor<T>.AddAdditionalText(embedBuilder);
 

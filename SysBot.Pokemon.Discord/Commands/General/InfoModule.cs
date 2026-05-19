@@ -31,13 +31,13 @@ namespace SysBot.Pokemon.Discord
             builder.AddField("Info",
                 $"- {Format.Bold("Owner")}: {app.Owner} ({app.Owner.Id})\n" +
                 $"- {Format.Bold("Original Repo")}: {("[SysBot.Net](https://github.com/kwsch/SysBot.NET)")}\n" +
-                $"- {Format.Bold("This Bot")}: {("[PokedexMasterBot](https://github.com/whosluzy/Sysbot-UP)")}\n" +
+                $"- {Format.Bold("This Bot")}: {("[FusionBot](https://github.com/Secludedly/FusionBot)")}\n" +
                 $"- {Format.Bold("Forked From")}: {("[PokeBot](https://github.com/hexbyt3/PokeBot)")}\n" +
                 $"- {Format.Bold("Library")}: Discord.Net ({DiscordConfig.Version})\n" +
                 $"- {Format.Bold("Uptime")}: {GetUptime()}\n" +
                 $"- {Format.Bold("Runtime")}: {RuntimeInformation.FrameworkDescription} {RuntimeInformation.ProcessArchitecture}\n" +
                 $"- {Format.Bold("Buildtime")}: {GetVersionInfo("SysBot.Base", false)}\n" +
-                $"- {Format.Bold("PokedexMasterBot Version")}: {TradeBot.Version}\n" +
+                $"- {Format.Bold("FusionBot Version")}: {TradeBot.Version}\n" +
                 $"- {Format.Bold("Core & ALM Version")}: {GetVersionInfo("PKHeX.Core")}\n" +
                 $"- {Format.Bold("Contributers")}: {("Kaphotics, hexbyt3, Secludedly")}\n"
             );
