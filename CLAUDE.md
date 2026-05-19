@@ -7,6 +7,11 @@ Fork of `kwsch/SysBot.NET` (via `Secludedly/FusionBot` and `hexbyt3/PokeBot`), b
 1. **Never modify Pokémon Showdown parsing, legality validation, or Pokémon request/generation logic.** Anything touching `AutoLegalityWrapper`, `ShowdownSet`, `ShowdownUtil`, `PKHeX`, legality, species lookup, move validation, or trade processing logic is off-limits unless the user explicitly asks.
 2. **Never rename or alter CDN URLs** containing `ZE-FusionBot-Sprite-Images` or `ZE-FusionBot-HOME-Images`. Those repos belong to Secludedly and are linked from the embeds — they are not ours to rename even when rebranding "FusionBot" → "PokedexMasterBot".
 3. **Never skip git hooks** (`--no-verify`, `--no-gpg-sign`, etc.) unless explicitly told to. If a hook fails, fix the real issue.
+4. **After any upstream sync, always verify and restore these fork-specific values:**
+   - `UpdateChecker.cs`: `RepositoryOwner = "whosluzy"`, `RepositoryName = "Sysbot-UP"`, User-Agent = `"PokedexMasterBot"` — must point to this fork, not upstream.
+   - `UpdateForm.cs`: User-Agent = `"PokedexMasterBot"`.
+   - `DiscordSettings.cs`: `TradeCooldownMinutes` and `RolesExemptFromCooldown` properties must exist (see Trade cooldown system section).
+   - `TradeCooldownTracker.cs` must exist in `SysBot.Pokemon.Discord/Helpers/` and all cooldown enforcement points must be wired up (see Trade cooldown system section).
 
 ## Workflow
 

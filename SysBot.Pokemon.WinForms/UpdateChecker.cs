@@ -10,8 +10,8 @@ namespace SysBot.Pokemon.WinForms
 {
     public class UpdateChecker
     {
-        private const string RepositoryOwner = "Secludedly";
-        private const string RepositoryName = "FusionBot";
+        private const string RepositoryOwner = "whosluzy";
+        private const string RepositoryName = "Sysbot-UP";
 
         // Reuse HttpClient for better performance and socket management
         private static readonly HttpClient _httpClient = new()
@@ -21,7 +21,7 @@ namespace SysBot.Pokemon.WinForms
 
         static UpdateChecker()
         {
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", "FusionBot");
+            _httpClient.DefaultRequestHeaders.Add("User-Agent", "PokedexMasterBot");
         }
 
         public static async Task<(bool UpdateAvailable, bool UpdateRequired, string NewVersion)> CheckForUpdatesAsync(bool forceShow = false, bool showDialog = true)
