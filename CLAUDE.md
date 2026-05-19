@@ -10,6 +10,7 @@ Fork of `kwsch/SysBot.NET` (via `Secludedly/FusionBot` and `hexbyt3/PokeBot`), b
 4. **After any upstream sync, always verify and restore these fork-specific values:**
    - `UpdateChecker.cs`: `RepositoryOwner = "whosluzy"`, `RepositoryName = "Sysbot-UP"`, User-Agent = `"PokedexMasterBot"` — must point to this fork, not upstream.
    - `UpdateForm.cs`: User-Agent = `"PokedexMasterBot"`.
+   - `SysBot.Pokemon.WinForms.csproj`: `AssemblyName` must be `PokedexMasterBot`; the rename target must produce `PokedexMasterBot_x.x.x.exe` (not `FusionBot_x.x.x.exe`). Without this the CI release has no exe.
    - `DiscordSettings.cs`: `TradeCooldownMinutes` and `RolesExemptFromCooldown` properties must exist (see Trade cooldown system section).
    - `TradeCooldownTracker.cs` must exist in `SysBot.Pokemon.Discord/Helpers/` and all cooldown enforcement points must be wired up (see Trade cooldown system section).
 

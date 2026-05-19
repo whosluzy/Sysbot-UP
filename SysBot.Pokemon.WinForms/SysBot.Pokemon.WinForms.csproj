@@ -5,7 +5,7 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <UseWindowsForms>true</UseWindowsForms>
-    <AssemblyName>FusionBot</AssemblyName>
+    <AssemblyName>PokedexMasterBot</AssemblyName>
     <SelfContained>false</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <DebugType>pdbonly</DebugType>
@@ -112,13 +112,13 @@
     </EmbeddedResource>
   </ItemGroup>
 
-  <!-- Rename the published exe to FusionBot_x.x.x.exe using the Version from TradeBot.cs (with the "v" stripped). -->
+  <!-- Rename the published exe to PokedexMasterBot_x.x.x.exe using the Version from TradeBot.cs (with the "v" stripped). -->
   <Target Name="RenamePublishOutput" AfterTargets="Publish">
     <PropertyGroup>
       <_TradeBotPath>$(MSBuildThisFileDirectory)..\SysBot.Pokemon\Helpers\TradeBot.cs</_TradeBotPath>
       <_VersionFromCode>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(_TradeBotPath)')), 'Version\s*=\s*"v?([0-9.]+)"').Groups[1].Value)</_VersionFromCode>
       <_SrcExe>$(PublishDir)$(AssemblyName).exe</_SrcExe>
-      <_DstExe>$(PublishDir)FusionBot_$(_VersionFromCode).exe</_DstExe>
+      <_DstExe>$(PublishDir)PokedexMasterBot_$(_VersionFromCode).exe</_DstExe>
     </PropertyGroup>
     <Message Importance="high" Text="Renaming '$(_SrcExe)' -&gt; '$(_DstExe)'" Condition="'$(_VersionFromCode)' != '' and Exists('$(_SrcExe)')" />
     <Move SourceFiles="$(_SrcExe)" DestinationFiles="$(_DstExe)" OverwriteReadOnlyFiles="true" Condition="'$(_VersionFromCode)' != '' and Exists('$(_SrcExe)')" />
