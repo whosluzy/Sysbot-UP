@@ -134,7 +134,7 @@ namespace SysBot.Pokemon.Twitch
         {
             var name = Info.TrainerName;
             var trainer = string.IsNullOrEmpty(name) ? string.Empty : $", @{name}";
-            var message = $"I'm waiting for you{trainer}! My IGN is {routine.InGameName}.";
+            var message = $"I'm waiting for you{trainer}! Bot's IGN is {routine.InGameName}.";
             var dest = Settings.TradeSearchDestination;
             if (dest == TwitchMessageDestination.Channel)
                 message += " Use the code you whispered me to search!";

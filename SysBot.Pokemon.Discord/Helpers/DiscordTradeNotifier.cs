@@ -254,7 +254,7 @@ public class DiscordTradeNotifier<T> : IPokeTradeNotifier<T>, IDisposable
         if (Data is PB7 && LGCode != null && LGCode.Count != 0)
         {
             var batchInfo = TotalBatchTrades > 1 ? $" (Trade {BatchTradeNumber}/{TotalBatchTrades})" : "";
-            var message = $"I'm waiting for you{trainer}{batchInfo}! My IGN is **{routine.InGameName}**.";
+            var message = $"I'm waiting for you{trainer}{batchInfo}! Bot's IGN is **{routine.InGameName}**.";
             Trader.SendMessageAsync(message).ConfigureAwait(false);
         }
         else
