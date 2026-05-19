@@ -262,7 +262,7 @@ public static class CreatePokemonHelper
         var etaMessage = $"Wait Estimate: {baseEta:F1} min(s) for trade.";
         string footerText = $"Current Queue Position: {(position.Position == -1 ? 1 : position.Position)}";
         footerText += $"\n{etaMessage}";
-        footerText += $"\nFusionBot {TradeBot.Version}";
+        footerText += $"\nPokedexMasterBot {TradeBot.Version}";
 
         var embedBuilder = new EmbedBuilder()
             .WithColor(embedColor)
