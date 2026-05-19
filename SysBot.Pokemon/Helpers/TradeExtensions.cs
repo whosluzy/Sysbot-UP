@@ -581,7 +581,7 @@ public abstract class TradeExtensions<T> where T : PKM, new()
     }
 }
 
-// Add the missing method definition for 'SetHandlerandMemory' to the PKMExtensions class.
+// Add the missing method definition for 'SetHandlerandMemory' to the PKMExtensions class.  
 public static class PKMExtensions
 {
     public static void SetHandlerandMemory(this PKM pkm, ITrainerInfo trainerInfo, IEncounterable? encounter)
