@@ -123,9 +123,17 @@ public static class EmbedHelper
                 return;
             }
 
+            string friendlyHint = reason switch
+            {
+                var r when r.Contains("NoTrainerFound") => "\n\nTry Again! Make Sure You Are Online in Link Trade and Search the Code When i Tell You!",
+                var r when r.Contains("ExceptionInternal") => "\n\nPlease Contact @Admin, This Bot Could be DOWN!",
+                var r when r.Contains("TrainerTooSlow") => "\n\nRequest Again! Keep Pressing Confirm on a Pokemon to Trade Me Back!",
+                _ => string.Empty,
+            };
+
             var embed = new EmbedBuilder()
                 .WithTitle("Trade Canceled...")
-                .WithDescription($"Your trade was canceled.\n**Reason**: {reason}")
+                .WithDescription($"Your trade was canceled.\n**Reason**: {reason}{friendlyHint}")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-uhoherror.gif")
                 .WithColor(Color.Red)
@@ -167,7 +175,7 @@ public static class EmbedHelper
 
             var embed = new EmbedBuilder()
                 .WithTitle("Here's your Link Trade Code!")
-                .WithDescription($"# {code:0000 0000}\n*I'll notify you when your trade starts!*")
+                .WithDescription($"# {code:0000 0000}\n*Insert Code Above in Game but DO NOT Search Yet!*")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-tradecode.gif")
                 .WithColor(Color.Gold)
@@ -296,7 +304,7 @@ public static class EmbedHelper
             }
 
             var embed = new EmbedBuilder()
-                .WithTitle($"Now Searching...")
+                .WithTitle("Begin Searching the Code in Game!")
                 .WithDescription($"**Waiting For**: {trainerName}\n**My IGN**: {inGameName}\n\n**Insert your Trade Code!**")
                 .WithTimestamp(DateTimeOffset.Now)
                 .WithThumbnailUrl("https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/dm-nowsearching.gif")
