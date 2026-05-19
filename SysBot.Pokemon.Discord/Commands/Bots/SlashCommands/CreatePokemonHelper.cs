@@ -221,6 +221,9 @@ public static class CreatePokemonHelper
         // Add to queue
         var added = Info.AddToTradeQueue(trade, userID, false, sig == RequestSignificance.Owner);
 
+        if (added == QueueResultAdd.Added && discordCfg.TradeCooldownMinutes > 0 && !exempt)
+            TradeCooldownTracker.RecordTrade(userID);
+
         if (added == QueueResultAdd.AlreadyInQueue)
         {
             await context.Interaction.FollowupAsync("❌ You are already in the queue!", ephemeral: true).ConfigureAwait(false);

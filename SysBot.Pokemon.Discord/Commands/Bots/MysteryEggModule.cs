@@ -263,6 +263,9 @@ namespace SysBot.Pokemon.Discord
 
             var added = Info.AddToTradeQueue(trade, context.User.Id, false, sig == RequestSignificance.Owner);
 
+            if (added == QueueResultAdd.Added)
+                QueueHelper<T>.RecordCooldownIfApplicable(context.User, context.User.Id);
+
             // Send trade code once
             await EmbedHelper.SendTradeCodeEmbedAsync(context.User, batchTradeCode).ConfigureAwait(false);
 

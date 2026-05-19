@@ -132,6 +132,9 @@ public static class QueueHelper<T> where T : PKM, new()
         var isSudo = sig == RequestSignificance.Owner;
         var added = Info.AddToTradeQueue(trade, userID, false, isSudo);
 
+        if (added == QueueResultAdd.Added)
+            RecordCooldownIfApplicable(trader, userID);
+
         // Start queue position updates for Discord notification
         if (added != QueueResultAdd.AlreadyInQueue && added != QueueResultAdd.NotAllowedItem && notifier is DiscordTradeNotifier<T> discordNotifier)
         {
@@ -340,6 +343,9 @@ public static class QueueHelper<T> where T : PKM, new()
 
         var added = Info.AddToTradeQueue(trade, userID, false, sig == RequestSignificance.Owner);
 
+        if (added == QueueResultAdd.Added)
+            RecordCooldownIfApplicable(trader, userID);
+
         // Send trade code once
         await EmbedHelper.SendTradeCodeEmbedAsync(trader, code).ConfigureAwait(false);
 
@@ -530,6 +536,9 @@ public static class QueueHelper<T> where T : PKM, new()
 
         var added = Info.AddToTradeQueue(trade, userID, false, sig == RequestSignificance.Owner);
 
+        if (added == QueueResultAdd.Added)
+            RecordCooldownIfApplicable(trader, userID);
+
         await EmbedHelper.SendTradeCodeEmbedAsync(trader, code).ConfigureAwait(false);
 
         if (added != QueueResultAdd.AlreadyInQueue && added != QueueResultAdd.NotAllowedItem && notifier is DiscordTradeNotifier<T> discordNotifier)
@@ -648,6 +657,9 @@ public static class QueueHelper<T> where T : PKM, new()
             return;
 
         var added = Info.AddToTradeQueue(trade, userID, false, sig == RequestSignificance.Owner);
+
+        if (added == QueueResultAdd.Added)
+            RecordCooldownIfApplicable(trader, userID);
 
         // Send trade code once
         await EmbedHelper.SendTradeCodeEmbedAsync(trader, code).ConfigureAwait(false);

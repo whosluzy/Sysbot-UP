@@ -296,10 +296,6 @@ public class DiscordTradeNotifier<T> : IPokeTradeNotifier<T>, IDisposable
         {
             OnFinish?.Invoke(routine);
             StopPeriodicUpdates();
-
-            var cfg = SysCord<T>.Runner.Config.Discord;
-            if (cfg.TradeCooldownMinutes > 0 && !TradeCooldownTracker.IsExempt(Trader, cfg))
-                TradeCooldownTracker.RecordTrade(_traderID);
         }
 
         var tradedToUser = Data.Species;
