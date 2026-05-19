@@ -186,7 +186,7 @@ public class DiscordSettings
     public int TradeCooldownMinutes { get; set; } = 10;
 
     [Category(Roles), Description("Users with these roles bypass the trade cooldown."), DisplayName("Roles Exempt From Cooldown")]
-    public RemoteControlAccessList RolesExemptFromCooldown { get; set; } = new();
+    public RemoteControlAccessList RolesExemptFromCooldown { get; set; } = new() { AllowIfEmpty = false };
 
     public override string ToString() => "Discord Integration Settings";
 

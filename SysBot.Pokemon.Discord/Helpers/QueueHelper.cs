@@ -132,6 +132,9 @@ public static class QueueHelper<T> where T : PKM, new()
         var isSudo = sig == RequestSignificance.Owner;
         var added = Info.AddToTradeQueue(trade, userID, false, isSudo);
 
+        if (added == QueueResultAdd.Added)
+            RecordCooldownIfApplicable(trader, userID);
+
         // Start queue position updates for Discord notification
         if (added != QueueResultAdd.AlreadyInQueue && added != QueueResultAdd.NotAllowedItem && notifier is DiscordTradeNotifier<T> discordNotifier)
         {
