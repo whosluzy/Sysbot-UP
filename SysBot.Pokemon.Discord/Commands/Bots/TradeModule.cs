@@ -212,37 +212,30 @@ public partial class TradeModule<T> : ModuleBase<SocketCommandContext> where T :
         content = ReusableActions.StripCodeBlock(content);
         var set = new ShowdownSet(content);
 
-        // You can still get template if you want other ALM things, but not for GenerateEgg
-         var template = AutoLegalityWrapper.GetTemplate(set);
+        var template = AutoLegalityWrapper.GetTemplate(set);
 
         _ = Task.Run(async () =>
         {
             try
             {
                 var sav = AutoLegalityWrapper.GetTrainerInfo<T>();
+                var pkm = sav.GetLegal(template, out var result);
 
-                // Wrap the ShowdownSet in a RegenTemplate for GenerateEgg
-                var regenTemplate = new RegenTemplate(set);
-
-                // Generate the egg using ALM's GenerateEgg
-                var pkm = sav.GenerateEgg(regenTemplate, out var result);
-
-                if (result != LegalizationResult.Regenerated)
+                if (pkm == null)
                 {
-                    var reason = result == LegalizationResult.Timeout
-                        ? "Egg generation took too long and the bot timed out."
-                        : "Failed to generate egg from the provided set.\nTry to remove possible illegal lines and try again.";
-                    await Helpers<T>.ReplyAndDeleteAsync(Context, reason, 6);
+                    await Helpers<T>.ReplyAndDeleteAsync(Context, "Set took too long to legalize.", 6);
                     return;
                 }
 
-                // Convert to bot runtime type
                 pkm = EntityConverter.ConvertToType(pkm, typeof(T), out _) ?? pkm;
                 if (pkm is not T pk)
                 {
                     await Helpers<T>.ReplyAndDeleteAsync(Context, "Oops! I wasn't able to create an egg for that.\nTry to remove possible illegal lines and try again", 6);
                     return;
                 }
+
+                pk.IsNicknamed = false;
+                TradeExtensions<T>.EggTrade(pk, template);
 
                 var sig = Context.User.GetFavor();
                 await Helpers<T>.AddTradeToQueueAsync(Context, code, Context.User.Username, pk, sig, Context.User).ConfigureAwait(false);

@@ -579,6 +579,146 @@ public abstract class TradeExtensions<T> where T : PKM, new()
 
         return false;
     }
+
+    public static void EggTrade(PKM pk, IBattleTemplate template, bool nicknameEgg = true)
+    {
+        if (nicknameEgg)
+        {
+            pk.IsNicknamed = true;
+            pk.Nickname = pk.Language switch
+            {
+                1 => "タマゴ",
+                3 => "Œuf",
+                4 => "Uovo",
+                5 => "Ei",
+                7 => "Huevo",
+                8 => "알",
+                9 or 10 => "蛋",
+                _ => "Egg",
+            };
+        }
+        else
+        {
+            pk.IsNicknamed = false;
+            pk.Nickname = "";
+        }
+
+        pk.IsEgg = true;
+        pk.EggLocation = pk switch
+        {
+            PB8 => 60010,
+            PK9 => 30023,
+            _ => 60002,
+        };
+
+        pk.MetDate = DateOnly.FromDateTime(DateTime.Now);
+        pk.EggMetDate = pk.MetDate;
+        pk.HeldItem = 0;
+        pk.CurrentLevel = 1;
+        pk.EXP = 0;
+        pk.MetLevel = 1;
+        pk.MetLocation = pk switch
+        {
+            PB8 => 65535,
+            PK9 => 0,
+            _ => 30002,
+        };
+
+        pk.CurrentHandler = 0;
+        pk.OriginalTrainerFriendship = 1;
+        pk.HandlingTrainerName = "";
+        ClearHandlingTrainerTrash(pk);
+        pk.HandlingTrainerFriendship = 0;
+        pk.ClearMemories();
+        pk.StatNature = pk.Nature;
+        pk.SetEVs([0, 0, 0, 0, 0, 0]);
+
+        MarkingApplicator.SetMarkings(pk);
+        RibbonApplicator.RemoveAllValidRibbons(pk);
+        pk.ClearRelearnMoves();
+
+        if (pk is PK8 pk8)
+        {
+            pk8.HandlingTrainerLanguage = 0;
+            pk8.HandlingTrainerGender = 0;
+            pk8.HandlingTrainerMemory = 0;
+            pk8.HandlingTrainerMemoryFeeling = 0;
+            pk8.HandlingTrainerMemoryIntensity = 0;
+            pk8.DynamaxLevel = 0;
+        }
+        else if (pk is PB8 pb8)
+        {
+            pb8.HandlingTrainerLanguage = 0;
+            pb8.HandlingTrainerGender = 0;
+            pb8.HandlingTrainerMemory = 0;
+            pb8.HandlingTrainerMemoryFeeling = 0;
+            pb8.HandlingTrainerMemoryIntensity = 0;
+            pb8.DynamaxLevel = 0;
+        }
+        else if (pk is PK9 pk9)
+        {
+            pk9.HandlingTrainerLanguage = 0;
+            pk9.HandlingTrainerGender = 0;
+            pk9.HandlingTrainerMemory = 0;
+            pk9.HandlingTrainerMemoryFeeling = 0;
+            pk9.HandlingTrainerMemoryIntensity = 0;
+            pk9.ObedienceLevel = 1;
+            pk9.Version = 0;
+            pk9.BattleVersion = 0;
+            pk9.TeraTypeOverride = (PKHeX.Core.MoveType)19;
+        }
+
+        pk.RefreshChecksum();
+        var la = new LegalityAnalysis(pk);
+        var enc = la.EncounterMatch;
+
+        Span<ushort> relearn = stackalloc ushort[4];
+        la.GetSuggestedRelearnMoves(relearn, enc);
+        pk.SetRelearnMoves(relearn);
+
+        if (pk is ITechRecord tr)
+            tr.ClearRecordFlags();
+
+        pk.SetSuggestedMoves();
+        pk.Move1_PPUps = pk.Move2_PPUps = pk.Move3_PPUps = pk.Move4_PPUps = 0;
+        pk.SetMaximumPPCurrent(pk.Moves);
+        pk.MaximizeFriendship();
+        pk.RefreshChecksum();
+    }
+
+    private static void ClearHandlingTrainerTrash(PKM pk)
+    {
+        switch (pk)
+        {
+            case PK8 pk8:
+                ClearTrash(pk8.HandlingTrainerTrash, "");
+                break;
+            case PB8 pb8:
+                ClearTrash(pb8.HandlingTrainerTrash, "");
+                break;
+            case PK9 pk9:
+                ClearTrash(pk9.HandlingTrainerTrash, "");
+                break;
+        }
+    }
+
+    private static void ClearTrash(Span<byte> trash, string name)
+    {
+        trash.Clear();
+        int maxLength = trash.Length / 2;
+        int actualLength = Math.Min(name.Length, maxLength);
+        for (int i = 0; i < actualLength; i++)
+        {
+            char value = name[i];
+            trash[i * 2] = (byte)value;
+            trash[(i * 2) + 1] = (byte)(value >> 8);
+        }
+        if (actualLength < maxLength)
+        {
+            trash[actualLength * 2] = 0x00;
+            trash[(actualLength * 2) + 1] = 0x00;
+        }
+    }
 }
 
 // Add the missing method definition for 'SetHandlerandMemory' to the PKMExtensions class.  

@@ -212,19 +212,12 @@ public static class Helpers<T> where T : PKM, new()
         string result;
 
         // Generate egg or normal pokemon based on isEgg flag
-        if (isEgg)
-        {
-            // Create a proper RegenTemplate from the ShowdownSet
-            var regenTemplate = new RegenTemplate(set);
+        pkm = sav.GetLegal(template, out result);
 
-            // Generate egg using ALM
-            pkm = sav.GenerateEgg(regenTemplate, out var eggResult);
-            result = eggResult.ToString();
-        }
-        else
+        if (isEgg && pkm is T eggPkBeforeConvert)
         {
-            // Use normal template for regular Pokémon
-            pkm = sav.GetLegal(template, out result);
+            eggPkBeforeConvert.IsNicknamed = false;
+            TradeExtensions<T>.EggTrade(eggPkBeforeConvert, template);
         }
 
         if (pkm == null)
