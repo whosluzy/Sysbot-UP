@@ -58,7 +58,7 @@ public static class TradeCooldownTracker
             .WithDescription($"Please wait **{minutesRemaining} minutes** to request another pokemon.")
             .AddField("💎 GET PREMIUM for UNLIMITED Trades!",
                 "**Step 1:** [Become a Patron](https://www.patreon.com/c/pokedexmasters/membership)\n" +
-                "**Step 2:** Link your Discord account to Patreon to gain the **Premium** role.\n" +
+                "**Step 2:** [Link your Discord account to Patreon](https://www.patreon.com/settings/apps/discord) to gain the **Premium** role.\n" +
                 "**Step 3:** All bots unlock automatically — trade as much as you want!")
             .Build();
     }
