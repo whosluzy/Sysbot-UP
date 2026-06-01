@@ -1150,6 +1150,11 @@ namespace SysBot.Pokemon.WinForms
         public void SetupThemeAwareButtons()
         {
             var colors = ThemeManager.CurrentColors;
+            // Slightly lighter shade of PanelBase for a clean hover highlight
+            var hoverColor = Color.FromArgb(
+                Math.Min(colors.PanelBase.R + 22, 255),
+                Math.Min(colors.PanelBase.G + 22, 255),
+                Math.Min(colors.PanelBase.B + 22, 255));
 
             foreach (var btn in new[] { btnBots, btnHub, btnLogs })
             {
@@ -1158,6 +1163,8 @@ namespace SysBot.Pokemon.WinForms
                 btn.UseVisualStyleBackColor = false;
                 btn.FlatStyle = FlatStyle.Flat;
                 btn.FlatAppearance.BorderSize = 0;
+                btn.FlatAppearance.MouseOverBackColor = hoverColor;
+                btn.FlatAppearance.MouseDownBackColor = colors.PanelBase;
             }
         }
 
