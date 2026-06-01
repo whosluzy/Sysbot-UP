@@ -180,6 +180,19 @@ namespace SysBot.Pokemon.WinForms
 
             InitializeFonts();         // Apply custom fonts after component initialization
             pictureLogo.Visible = false;
+
+            var lblLogo = new Label
+            {
+                Text = "Sysbot-UP",
+                ForeColor = Color.White,
+                BackColor = Color.Transparent,
+                Font = FontManager.Get("Enter The Grid", 16F, FontStyle.Regular),
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                AutoSize = false,
+            };
+            panelImageLogo.Controls.Add(lblLogo);
+            lblLogo.BringToFront();
             SetupTitleBarButtonHoverEffects();
             panelTitleBar.Paint += panelTitleBar_Paint;
             Instance = this;
