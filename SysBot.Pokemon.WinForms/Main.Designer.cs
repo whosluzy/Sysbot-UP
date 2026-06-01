@@ -45,7 +45,6 @@ namespace SysBot.Pokemon.WinForms
             panelLeftSide = new Panel();
             btnLogs = new IconButton();
             btnHub = new IconButton();
-            CB_Themes = new ComboBox();
             btnBots = new IconButton();
             panelImageLogo = new Panel();
             panel6 = new Panel();
@@ -83,7 +82,6 @@ namespace SysBot.Pokemon.WinForms
             panelLeftSide.BackColor = Color.FromArgb(31, 30, 68);
             panelLeftSide.Controls.Add(btnLogs);
             panelLeftSide.Controls.Add(btnHub);
-            panelLeftSide.Controls.Add(CB_Themes);
             panelLeftSide.Controls.Add(btnBots);
             panelLeftSide.Controls.Add(panelImageLogo);
             panelLeftSide.Controls.Add(lblTitle);
@@ -138,17 +136,7 @@ namespace SysBot.Pokemon.WinForms
             btnHub.TextImageRelation = TextImageRelation.ImageBeforeText;
             btnHub.UseVisualStyleBackColor = true;
             btnHub.Click += Hub_Click;
-            // 
-            // CB_Themes
-            // 
-            CB_Themes.BackColor = Color.FromArgb(20, 19, 57);
-            CB_Themes.ForeColor = Color.White;
-            CB_Themes.FormattingEnabled = true;
-            CB_Themes.Location = new Point(47, 322);
-            CB_Themes.Name = "CB_Themes";
-            CB_Themes.Size = new Size(127, 28);
-            CB_Themes.TabIndex = 5;
-            // 
+            //
             // btnBots
             // 
             btnBots.Dock = DockStyle.Top;
@@ -416,21 +404,10 @@ namespace SysBot.Pokemon.WinForms
         }
 
         private void panelTitleBar_Paint(object sender, PaintEventArgs e)
-{
-    // Draw the existing image first
-    if (panelTitleBar.BackgroundImage != null)
-        e.Graphics.DrawImage(panelTitleBar.BackgroundImage, 0, 0, panelTitleBar.Width, panelTitleBar.Height);
-
-    // Draw sparkles
-    foreach (var sp in sparkles)
-    {
-        int alpha = (int)(255 * (float)sp.Life / sp.MaxLife);
-        using (Brush brush = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
         {
-            e.Graphics.FillEllipse(brush, sp.Position.X, sp.Position.Y, sp.Size, sp.Size);
+            if (panelTitleBar.BackgroundImage != null)
+                e.Graphics.DrawImage(panelTitleBar.BackgroundImage, 0, 0, panelTitleBar.Width, panelTitleBar.Height);
         }
-    }
-}
 
 
         #endregion
@@ -454,7 +431,6 @@ namespace SysBot.Pokemon.WinForms
         internal Panel panel3;
         internal Panel panel6;
         internal Panel panel5;
-        private ComboBox CB_Themes;
     }
 }
 
