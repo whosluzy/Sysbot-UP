@@ -374,20 +374,10 @@ public static class AutoLegalityWrapper
                     if (OT.Length == 0)
                         OT = "Blank";
 
-                    // Capture shiny state before overwriting TID/SID. Reading pk.IsShiny
-                    // afterwards reflects the new IDs against the old PID and would skip
-                    // the PID rebuild below — losing the shiny we just generated.
-                    bool wasShiny = pk.IsShiny;
-                    uint originalShinyXor = pk.ShinyXor;
-
                     // Replace with configured defaults
                     pk.OriginalTrainerName = OT;
                     pk.TrainerTID7 = (uint)((ConfiguredSettings.GenerateSID16 << 16) | ConfiguredSettings.GenerateTID16);
                     pk.Language = (int)ConfiguredSettings.GenerateLanguage;
-
-                    // Rebuild PID against the new TID/SID so the original shiny type is preserved.
-                    if (wasShiny)
-                        pk.PID = (uint)((pk.TID16 ^ pk.SID16 ^ (pk.PID & 0xFFFF) ^ originalShinyXor) << 16) | (pk.PID & 0xFFFF);
 
                     pk.RefreshChecksum();
                 }
