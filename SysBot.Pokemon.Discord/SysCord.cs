@@ -27,6 +27,9 @@ public static class SysCordSettings
     public static DiscordManager Manager { get; internal set; } = default!;
 
     public static DiscordSettings Settings => Manager.Config;
+
+    // true = online (green), false = offline (red)
+    public static Func<bool, Task>? AnnounceStatus { get; internal set; }
 }
 
 public sealed partial class SysCord<T> : IDisposable where T : PKM, new()
@@ -69,6 +72,8 @@ public sealed partial class SysCord<T> : IDisposable where T : PKM, new()
         Hub = runner.Hub;
         Manager = new DiscordManager(Hub.Config.Discord);
         _config = config;
+        SysCordSettings.AnnounceStatus = online =>
+            AnnounceBotStatus(online ? "Online" : "Offline", online ? EmbedColorOption.Green : EmbedColorOption.Red);
 
         foreach (var bot in runner.Hub.Bots.ToArray())
         {

@@ -533,14 +533,20 @@ namespace SysBot.Pokemon.WinForms
         }
 
         // Start the bot with the current config
-        private void B_Start_Click(object? sender, EventArgs e) // Start all bots on Start button click
+        private void B_Start_Click(object? sender, EventArgs e)
         {
-            SaveCurrentConfig();                               // Save the current config before starting the bot
+            SaveCurrentConfig();
+            LogUtil.LogInfo("Starting all bots...", "Form");
+            RunningEnvironment.InitializeStart();
+            SendAll(WebApi.BotControlCommand.Start);
+            _logsForm.LogsBox.Select();
 
-            LogUtil.LogInfo("Starting all bots...", "Form");   // Log the start action
-            RunningEnvironment.InitializeStart();              // Initialize the bot runner
-            SendAll(WebApi.BotControlCommand.Start);                  // Send the Start command to all bots present in the controller
-            _logsForm.LogsBox.Select();                        // Select the logs box in the LogsForm to write to
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(2000).ConfigureAwait(false);
+                if (SysCordSettings.AnnounceStatus != null)
+                    await SysCordSettings.AnnounceStatus(true).ConfigureAwait(false);
+            });
 
             if (Bots.Count == 0)
                 WinFormsUtil.Alert("No bots configured, but all supporting services have been started.");
@@ -628,7 +634,9 @@ namespace SysBot.Pokemon.WinForms
             }
             else
             {
-                env.StopAll(); // Stop in the name of love. (All bots)
+                env.StopAll();
+                if (SysCordSettings.AnnounceStatus != null)
+                    _ = SysCordSettings.AnnounceStatus(false);
             }
             SendAll(cmd);
         }
