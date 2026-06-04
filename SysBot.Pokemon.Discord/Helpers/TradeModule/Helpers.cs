@@ -123,7 +123,7 @@ public static class Helpers<T> where T : PKM, new()
         }
     }
 
-    public static Task<ProcessedPokemonResult<T>> ProcessShowdownSetAsync(string content, bool ignoreAutoOT = false, bool isRetry = false)
+    public static Task<ProcessedPokemonResult<T>> ProcessShowdownSetAsync(string content, bool ignoreAutoOT = false)
     {
         content = ReusableActions.StripCodeBlock(content);
         bool isEgg = TradeExtensions<T>.IsEggCheck(content);
@@ -720,6 +720,7 @@ public static class Helpers<T> where T : PKM, new()
 
         if (pkm is not T pk || !la.Valid)
         {
+            // Diagnostic: log specific legality failure reasons
             if (pkm != null && !la.Valid)
             {
                 var failReasons = string.Join(", ", la.Results
@@ -727,13 +728,6 @@ public static class Helpers<T> where T : PKM, new()
                     .Select(r => $"{r.Identifier}"));
                 LogUtil.LogInfo($"TradeModule legality fail: species={pkm.Species} form={pkm.Form} loc={pkm.MetLocation} ot='{pkm.OriginalTrainerName}' shiny={pkm.IsShiny} shinyXor={pkm.ShinyXor} result='{result}' | {failReasons}", "Legality");
             }
-
-            // ALM's encounter selection is non-deterministic — retry once automatically
-            // before reporting failure. Covers cases where a stricter PKHeX legality check
-            // rejects the first encounter but a second attempt picks a valid one.
-            if (!isRetry)
-                return ProcessShowdownSetAsync(content, ignoreAutoOT, isRetry: true);
-
             var reason = GetFailureReason(result, spec);
             var hint = result == "Failed" ? GetLegalizationHint(template, sav, pkm, spec) : null;
             return Task.FromResult(new ProcessedPokemonResult<T>
