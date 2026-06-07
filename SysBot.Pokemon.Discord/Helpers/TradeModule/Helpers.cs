@@ -214,12 +214,32 @@ public static class Helpers<T> where T : PKM, new()
         // Generate egg or normal pokemon based on isEgg flag
         if (isEgg)
         {
-            // Create a proper RegenTemplate from the ShowdownSet
             var regenTemplate = new RegenTemplate(set);
-
-            // Generate egg using ALM
             pkm = sav.GenerateEgg(regenTemplate, out var eggResult);
             result = eggResult.ToString();
+
+            // Apply user-specified ball. GenerateEgg ignores the ball in the template,
+            // so we parse it from the content and apply it manually, reverting if illegal.
+            if (pkm != null)
+            {
+                var ballLine = contentLines.FirstOrDefault(l => l.TrimStart().StartsWith("Ball:", StringComparison.OrdinalIgnoreCase));
+                if (ballLine != null)
+                {
+                    var ballName = ballLine.Split(':')[1].Trim();
+                    var strings = GameInfo.GetStrings("en");
+                    var ballId = Array.FindIndex(strings.balllist, b => b.Equals(ballName, StringComparison.OrdinalIgnoreCase));
+                    if (ballId > 0)
+                    {
+                        pkm.Ball = (byte)ballId;
+                        pkm.RefreshChecksum();
+                        if (!new LegalityAnalysis(pkm).Valid)
+                        {
+                            pkm.Ball = (byte)Ball.Poke;
+                            pkm.RefreshChecksum();
+                        }
+                    }
+                }
+            }
         }
         else
         {
