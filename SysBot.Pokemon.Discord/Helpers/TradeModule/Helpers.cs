@@ -218,25 +218,19 @@ public static class Helpers<T> where T : PKM, new()
             pkm = sav.GenerateEgg(regenTemplate, out var eggResult);
             result = eggResult.ToString();
 
-            // Apply user-specified ball. GenerateEgg ignores the ball in the template,
-            // so we parse it from the content and apply it manually, reverting if illegal.
-            if (pkm != null)
+            // ForceSpecifiedBall is not applied by GenerateEgg — apply it manually.
+            if (pkm != null && APILegality.ForceSpecifiedBall)
             {
                 var ballLine = contentLines.FirstOrDefault(l => l.TrimStart().StartsWith("Ball:", StringComparison.OrdinalIgnoreCase));
                 if (ballLine != null)
                 {
                     var ballName = ballLine.Split(':')[1].Trim();
-                    var strings = GameInfo.GetStrings("en");
-                    var ballId = Array.FindIndex(strings.balllist, b => b.Equals(ballName, StringComparison.OrdinalIgnoreCase));
+                    var ballId = Array.FindIndex(GameInfo.GetStrings("en").balllist,
+                        b => b.Equals(ballName, StringComparison.OrdinalIgnoreCase));
                     if (ballId > 0)
                     {
                         pkm.Ball = (byte)ballId;
                         pkm.RefreshChecksum();
-                        if (!new LegalityAnalysis(pkm).Valid)
-                        {
-                            pkm.Ball = (byte)Ball.Poke;
-                            pkm.RefreshChecksum();
-                        }
                     }
                 }
             }
