@@ -349,11 +349,12 @@ public partial class TradeModule<T> : ModuleBase<SocketCommandContext> where T :
     {
         keyword = keyword.ToLower().Trim();
 
-        if (!Enum.TryParse(language, true, out LanguageID lang))
+        if (!LanguageHelper.TryParseLanguage(language, out var langByte))
         {
             await Helpers<T>.ReplyAndDeleteAsync(Context, $"Couldn't recognize language: {language}.", 5);
             return;
         }
+        var lang = (LanguageID)langByte;
 
         nature = nature.Trim()[..1].ToUpper() + nature.Trim()[1..].ToLower();
         var set = new ShowdownSet($"{keyword}(Ditto)\nLanguage: {lang}\nNature: {nature}");

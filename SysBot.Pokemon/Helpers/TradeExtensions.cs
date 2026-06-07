@@ -453,24 +453,10 @@ public abstract class TradeExtensions<T> where T : PKM, new()
         var lines = content.Split('\n');
         foreach (var line in lines)
         {
-            if (line.StartsWith("Language", StringComparison.OrdinalIgnoreCase))
+            if (line.StartsWith("Language", StringComparison.OrdinalIgnoreCase) && line.Contains(':'))
             {
-                var language = line.Substring(line.IndexOf(':') + 1).Trim().ToLowerInvariant();
-
-                return language switch
-                {
-                    "english" or "eng" or "en" => 2,
-                    "french" or "français" or "fra" or "fr" => 3,
-                    "italian" or "italiano" or "ita" or "it" => 4,
-                    "german" or "deutsch" or "deu" or "de" => 5,
-                    "spanish" or "español" or "spa" or "es" => 7,
-                    "spanish-latam" or "spanishl" or "es-419" or "latam" => 11,
-                    "japanese" or "日本語" or "jpn" or "ja" => 1,
-                    "korean" or "한국어" or "kor" or "ko" => 8,
-                    "chinese simplified" or "中文简体" or "chs" or "zh-cn" => 9,
-                    "chinese traditional" or "中文繁體" or "cht" or "zh-tw" => 10,
-                    _ => 2 // Default to English if language is not recognized
-                };
+                var language = line[(line.IndexOf(':') + 1)..].Trim();
+                return LanguageHelper.TryParseLanguage(language, out var langId) ? langId : (byte)2;
             }
         }
 
