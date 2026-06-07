@@ -46,8 +46,7 @@ public static class AutoLegalityExtensionsDiscord
                 result = eggResult.ToString();
 
                 // GenerateEgg ignores ForceSpecifiedBall — apply the requested ball ourselves.
-                if (pkm != null)
-                    EggHelper.ApplySpecifiedBall(pkm, string.Join("\n", set.GetSetLines()));
+                EggBallHelper.ApplySpecifiedBall(pkm, string.Join("\n", set.GetSetLines()));
             }
             else
             {

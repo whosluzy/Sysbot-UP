@@ -79,6 +79,9 @@ namespace SysBot.Pokemon.Twitch
                         msg = $"Skipping trade, @{username}: Failed to generate egg.";
                         return false;
                     }
+
+                    // GenerateEgg ignores ForceSpecifiedBall — apply the requested ball ourselves.
+                    EggBallHelper.ApplySpecifiedBall(pkm, string.Join("\n", set.GetSetLines()));
                 }
                 else
                 {
