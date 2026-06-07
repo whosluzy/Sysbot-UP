@@ -218,22 +218,8 @@ public static class Helpers<T> where T : PKM, new()
             pkm = sav.GenerateEgg(regenTemplate, out var eggResult);
             result = eggResult.ToString();
 
-            // ForceSpecifiedBall is not applied by GenerateEgg — apply it manually.
-            if (pkm != null && APILegality.ForceSpecifiedBall)
-            {
-                var ballLine = contentLines.FirstOrDefault(l => l.TrimStart().StartsWith("Ball:", StringComparison.OrdinalIgnoreCase));
-                if (ballLine != null)
-                {
-                    var ballName = ballLine.Split(':')[1].Trim();
-                    var ballId = Array.FindIndex(GameInfo.GetStrings("en").balllist,
-                        b => b.Equals(ballName, StringComparison.OrdinalIgnoreCase));
-                    if (ballId > 0)
-                    {
-                        pkm.Ball = (byte)ballId;
-                        pkm.RefreshChecksum();
-                    }
-                }
-            }
+            if (pkm != null)
+                ApplySpecifiedBallToEgg(pkm, content);
         }
         else
         {
@@ -1011,6 +997,32 @@ public static class Helpers<T> where T : PKM, new()
         }
 
         return requestedLanguage;
+    }
+
+    /// <summary>
+    /// Applies a user-specified "Ball:" line to a generated egg. ALM's GenerateEgg does not
+    /// honor ForceSpecifiedBall (it leaves the species' matching/default ball), so the regular
+    /// trade path's ball selection never runs for eggs. This mirrors it for the egg path.
+    /// </summary>
+    public static void ApplySpecifiedBallToEgg(PKM pkm, string content)
+    {
+        if (!APILegality.ForceSpecifiedBall)
+            return;
+
+        var ballLine = content.Split('\n')
+            .FirstOrDefault(l => l.TrimStart().StartsWith("Ball:", StringComparison.OrdinalIgnoreCase));
+        if (ballLine == null)
+            return;
+
+        var ballName = ballLine.Split(':')[1].Trim();
+        static string Norm(string s) => s.Replace("é", "e").Replace("-", " ").Replace(" ", "").Trim();
+        var ballId = Array.FindIndex(GameInfo.GetStrings("en").balllist,
+            b => Norm(b).Equals(Norm(ballName), StringComparison.OrdinalIgnoreCase));
+        if (ballId <= 0)
+            return;
+
+        pkm.Ball = (byte)ballId;
+        pkm.RefreshChecksum();
     }
 
     public static string GetFailureReason(string result, string speciesName)

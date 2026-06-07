@@ -236,6 +236,9 @@ public partial class TradeModule<T> : ModuleBase<SocketCommandContext> where T :
                     return;
                 }
 
+                // GenerateEgg ignores ForceSpecifiedBall — apply the requested ball ourselves.
+                Helpers<T>.ApplySpecifiedBallToEgg(pkm, content);
+
                 // Convert to bot runtime type
                 pkm = EntityConverter.ConvertToType(pkm, typeof(T), out _) ?? pkm;
                 if (pkm is not T pk)
