@@ -44,6 +44,10 @@ public static class AutoLegalityExtensionsDiscord
                 // Generate egg using ALM
                 pkm = sav.GenerateEgg(regenTemplate, out var eggResult);
                 result = eggResult.ToString();
+
+                // GenerateEgg ignores ForceSpecifiedBall — apply the requested ball ourselves.
+                if (pkm != null)
+                    EggHelper.ApplySpecifiedBall(pkm, string.Join("\n", set.GetSetLines()));
             }
             else
             {
