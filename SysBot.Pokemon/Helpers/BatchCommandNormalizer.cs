@@ -295,6 +295,16 @@ namespace SysBot.Pokemon.Discord.Helpers
 
                 if (!line.Contains(":"))
                 {
+                    // Raw ".Scale=" batch lines are re-routed through ProcessScale so they
+                    // work on games whose format has no Scale field (SWSH/BDSP/LGPE).
+                    if (line.StartsWith(".Scale=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var scaleLine = ProcessScale(line[".Scale=".Length..].Trim());
+                        if (!string.IsNullOrWhiteSpace(scaleLine))
+                            processed.Add(scaleLine);
+                        continue;
+                    }
+
                     // Alcremie forms can now add a topping to the flavor without batch command
                     // For example, it accepts: Alcremie-Caramel-Swirl-Ribbon
                     // Just affix the topping name to the end of Alcremie's name after its flavor
@@ -467,11 +477,24 @@ namespace SysBot.Pokemon.Discord.Helpers
         //////////////////////////////////// HANDLER METHODS //////////////////////////////////////
 
         // .Scale= → Size: or Scale:
-        // Value is a size keyword or number 
-        private static string ProcessScale(string val) =>
-            SizeKeywords.TryGetValue(val, out var range)
-                ? $".Scale={Rng.Next(range.Min, range.Max + 1)}"
-                : $".Scale={val}";
+        // Value is a size keyword or number 0-255.
+        // Only Gen9 formats (SV/PLZA) have a Scale field; SWSH/BDSP/LGPE store size in
+        // HeightScalar, and PLA keeps Scale mirrored to HeightScalar.
+        private static string ProcessScale(string val)
+        {
+            int scale;
+            if (SizeKeywords.TryGetValue(val, out var range))
+                scale = Rng.Next(range.Min, range.Max + 1);
+            else if (!int.TryParse(val, out scale) || scale is < 0 or > 255)
+                return $".Scale={val}";
+
+            return CurrentGameMode switch
+            {
+                ProgramMode.SWSH or ProgramMode.BDSP or ProgramMode.LGPE => $".HeightScalar={scale}",
+                ProgramMode.LA => $".HeightScalar={scale}\n.Scale={scale}",
+                _ => $".Scale={scale}",
+            };
+        }
 
         // .WeightScalar= → Weight:
         // Value is a size keyword or number 

@@ -39,7 +39,7 @@ public static class DetailsExtractor<T> where T : PKM, new()
         string leftSideContent = $"**User:** {trainerMention}\n";
         leftSideContent +=
             (pk is PK9 && SysCord<T>.Runner.Config.Trade.TradeEmbedSettings.ShowTeraType ? $"**Tera Type:** {embedData.TeraType}\n" : "") +
-            (pk.Version is GameVersion.PLA or GameVersion.SL or GameVersion.VL && SysCord<T>.Runner.Config.Trade.TradeEmbedSettings.ShowScale ? $"**Scale:** {embedData.Scale.Item1} ({embedData.Scale.Item2})\n" : "") +
+            (SysCord<T>.Runner.Config.Trade.TradeEmbedSettings.ShowScale ? $"**Scale:** {embedData.Scale.Item1} ({embedData.Scale.Item2})\n" : "") +
             (SysCord<T>.Runner.Config.Trade.TradeEmbedSettings.ShowLevel ? $"**Level:** {embedData.Level}\n" : "") +
             (SysCord<T>.Runner.Config.Trade.TradeEmbedSettings.ShowBall ? $"**Ball:** {embedData.Ball}\n" : "") +
             (SysCord<T>.Runner.Config.Trade.TradeEmbedSettings.ShowMetLevel ? $"**Met Level:** {embedData.MetLevel}\n" : "") +
@@ -129,8 +129,8 @@ public static class DetailsExtractor<T> where T : PKM, new()
         if (pk is PK9 pk9)
         {
             embedData.TeraType = GetTeraTypeString(pk9);
-            embedData.Scale = GetScaleDetails(pk9);
         }
+        embedData.Scale = GetScaleDetails(pk);
 
         embedData.Ability = GetAbilityName(pk, strings);
         embedData.Nature = GetNatureName(pk, strings);
@@ -375,10 +375,16 @@ public static class DetailsExtractor<T> where T : PKM, new()
         return strings.natures[(int)pk.Nature];
     }
 
-    private static (string, byte) GetScaleDetails(PK9 pk9)
+    private static (string, byte) GetScaleDetails(T pk)
     {
-        string scaleText = $"{PokeSizeDetailedUtil.GetSizeRating(pk9.Scale)}";
-        byte scaleNumber = pk9.Scale;
+        // Gen9 formats (PK9/PA8/PA9) carry a real Scale field; older formats derive size from HeightScalar.
+        byte scaleNumber = pk switch
+        {
+            IScaledSize3 s3 => s3.Scale,
+            IScaledSize s => s.HeightScalar,
+            _ => 0,
+        };
+        string scaleText = $"{PokeSizeDetailedUtil.GetSizeRating(scaleNumber)}";
         return (scaleText, scaleNumber);
     }
 
