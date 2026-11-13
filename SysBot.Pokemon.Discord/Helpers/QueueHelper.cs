@@ -765,10 +765,10 @@ public static class QueueHelper<T> where T : PKM, new()
             return false;
         if (TradeCooldownTracker.IsExempt(trader, cfg))
             return false;
-        if (!TradeCooldownTracker.IsOnCooldown(userID, cfg.FreeTradeLimitMinutes, out int minsLeft))
+        if (!TradeCooldownTracker.IsOnCooldown(userID, cfg.FreeTradeLimitMinutes, out var unlocksAt))
             return false;
 
-        var embed = TradeCooldownTracker.BuildCooldownEmbed(minsLeft, cfg.FreeTradeLimitMinutes);
+        var embed = TradeCooldownTracker.BuildCooldownEmbed(unlocksAt, cfg.FreeTradeLimitMinutes);
 
         IUserMessage? sent = null;
         try

@@ -211,9 +211,9 @@ public static class CreatePokemonHelper
         var discordCfg = SysCord<T>.Runner.Config.Discord;
         bool exempt = TradeCooldownTracker.IsExempt(context.User, discordCfg);
         if (discordCfg.FreeTradeLimitMinutes > 0 && !exempt
-            && TradeCooldownTracker.IsOnCooldown(userID, discordCfg.FreeTradeLimitMinutes, out int minsLeft))
+            && TradeCooldownTracker.IsOnCooldown(userID, discordCfg.FreeTradeLimitMinutes, out var unlocksAt))
         {
-            var cdEmbed = TradeCooldownTracker.BuildCooldownEmbed(minsLeft, discordCfg.FreeTradeLimitMinutes);
+            var cdEmbed = TradeCooldownTracker.BuildCooldownEmbed(unlocksAt, discordCfg.FreeTradeLimitMinutes);
             await context.Interaction.FollowupAsync(embed: cdEmbed, ephemeral: true).ConfigureAwait(false);
             return false;
         }
