@@ -44,8 +44,6 @@ Checks (block BEFORE sending the trade-code DM):
 - `MysteryEggModule.ProcessBatchMysteryEggs` — calls `QueueHelper<T>.EnforceCooldown` directly.
 - `CreatePokemonHelper` (slash command) — inline `IsExempt` + `IsOnCooldown`, ephemeral followup with `BuildCooldownEmbed`.
 
-The limit is tracked under BOTH the Discord user ID and the trainer's in-game TID+SID (read from `tradecodes.json`, which the trade bots already fill in during each trade — no extra Switch reads). Blocked if either traded within the window, so alt Discord accounts on the same game save share one limit. A brand-new alt with no saved TID/SID can get one trade through before it is linked. Needs `StoreTradeCodes` on (default).
-
 A batch (up to 6 Pokémon) counts as one trade. Tracking is in-memory per bot process (a restart clears it).
 
 Limit message: friendly orange embed with the Patreon upsell + 3-step guide. Patreon URL: `https://www.patreon.com/c/pokedexmasters/membership`. Does NOT auto-delete (user dismisses).
