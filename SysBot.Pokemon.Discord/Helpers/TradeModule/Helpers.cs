@@ -143,6 +143,35 @@ public static class Helpers<T> where T : PKM, new()
         var filteredLines = contentLines.Where(line =>
             !line.TrimStart().StartsWith("Language:", StringComparison.OrdinalIgnoreCase)
         ).ToArray();
+
+        // Strip user-supplied OT:/TID:/SID: lines and capture them for explicit
+        // application after generation. ALM does not reliably propagate these
+        // from a RegenSet onto a PKM generated against the bot's configured sav,
+        // so without this the bot's GenerateOT/TID/SID survive into the trade.
+        string? userOT = null;
+        uint? userTID = null;
+        uint? userSID = null;
+        filteredLines = filteredLines.Where(line =>
+        {
+            var t = line.TrimStart();
+            if (t.StartsWith("OT:", StringComparison.OrdinalIgnoreCase))
+            {
+                userOT = t[3..].Trim();
+                return false;
+            }
+            if (t.StartsWith("TID:", StringComparison.OrdinalIgnoreCase) && uint.TryParse(t[4..].Trim(), out var tv))
+            {
+                userTID = tv;
+                return false;
+            }
+            if (t.StartsWith("SID:", StringComparison.OrdinalIgnoreCase) && uint.TryParse(t[4..].Trim(), out var sv))
+            {
+                userSID = sv;
+                return false;
+            }
+            return true;
+        }).ToArray();
+
         var contentWithoutLanguage = string.Join('\n', filteredLines);
 
         // Detect user-specified Tera Type (for SV non-native override fix)
@@ -174,6 +203,20 @@ public static class Helpers<T> where T : PKM, new()
         }
 
         var template = AutoLegalityWrapper.GetTemplate(set);
+
+        // ============================================================================
+        // PA9 VIVILLON TEMPLATE FORM FIX
+        // ============================================================================
+        // ALM's RegenTemplate constructor rewrites Vivillon's form to Meadow (6) no matter
+        // which pattern was parsed (set.Form is correct, template.Form is not). Every
+        // generation attempt for Z-A then targets Meadow, and the native Meadow encounter
+        // is accepted as legal. Restoring the requested pattern lets ALM find the encounter
+        // that actually provides it (Z-A event, or a HOME-transferred origin). A batch
+        // ".Form=" line only "fixed" this by accident: it failed the Meadow result and
+        // forced the HOME fallback, which then re-applied the species-line form.
+        // ============================================================================
+        if (typeof(T) == typeof(PA9) && set.Species == (ushort)Species.Vivillon && template.Form != set.Form)
+            template.Form = set.Form;
 
         // Filter out batch commands (.) and filters (~) from invalid lines - these are handled by ALM
         // Also filter out custom fields like Language: and Alpha: which are ALM-specific
@@ -214,8 +257,11 @@ public static class Helpers<T> where T : PKM, new()
         // Generate egg or normal pokemon based on isEgg flag
         if (isEgg)
         {
-            var regenTemplate = new RegenTemplate(set);
-            pkm = sav.GenerateEgg(regenTemplate, out var eggResult);
+            // Reuse the template built above. GetTemplate(set) already parsed the Ball:/.Scale=
+            // lines into its Regen AND removed them from set.InvalidLines, so a fresh
+            // RegenTemplate(set) here would silently drop the user's ball and batch commands.
+            // Generate egg (also applies the user's batch commands, e.g. .Scale=)
+            pkm = AutoLegalityWrapper.GenerateEgg(sav, template, out var eggResult);
             result = eggResult.ToString();
 
             if (pkm != null)
@@ -251,7 +297,9 @@ public static class Helpers<T> where T : PKM, new()
             if (fixedOtCheck.Valid && AutoLegalityWrapper.IsFixedOT(fixedOtCheck.EncounterOriginal, pkm))
             {
                 var wildAlt = AutoLegalityWrapper.TryGetAsWildOrEgg(sav, template);
-                if (wildAlt != null)
+                // Never trade away the requested form for a non-fixed-OT encounter
+                // (e.g. a Vivillon pattern only obtainable from an event -> wild Meadow).
+                if (wildAlt != null && wildAlt.Form == pkm.Form)
                 {
                     pkm = wildAlt;
                     result = "Regenerated";
@@ -457,7 +505,7 @@ public static class Helpers<T> where T : PKM, new()
             {
                 return Task.FromResult(new ProcessedPokemonResult<T>
                 {
-                    Error = "Mew can **not** be Shiny in LGPE. PoGo Mew does not transfer and Pokeball Plus Mew is shiny locked.",
+                    Error = "Mew cannot be Shiny in LGPE. Mew from POGO does not transfer & the Poke Ball Plus Mew is shiny-locked.",
                     ShowdownSet = set
                 });
             }
@@ -726,7 +774,7 @@ public static class Helpers<T> where T : PKM, new()
                 var failReasons = string.Join(", ", la.Results
                     .Where(r => !r.Valid)
                     .Select(r => $"{r.Identifier}"));
-                LogUtil.LogInfo($"TradeModule legality fail: species={pkm.Species} form={pkm.Form} loc={pkm.MetLocation} ot='{pkm.OriginalTrainerName}' shiny={pkm.IsShiny} shinyXor={pkm.ShinyXor} result='{result}' | {failReasons}", "Legality");
+                LogUtil.LogInfo($"TradeModule Legality Failure = Species: {pkm.Species} | Form: {pkm.Form} | Location: {pkm.MetLocation} | OT:'{pkm.OriginalTrainerName}' | Shiny: {pkm.IsShiny} | ShinyXor: {pkm.ShinyXor} | Result: '{result}' | Failure Issues: {failReasons}", "Legality");
             }
             var reason = GetFailureReason(result, spec);
             var hint = result == "Failed" ? GetLegalizationHint(template, sav, pkm, spec) : null;
@@ -739,19 +787,43 @@ public static class Helpers<T> where T : PKM, new()
         }
 
         // ============================================================================
+        // ZA CUSTOM IV SEED SEARCH
+        // ============================================================================
+        // Z-A IVs are seed-correlated (EC/PID → IVs), so writing IVs directly is illegal
+        // and the generic re-application below always reverts for Z-A. Instead, search
+        // for a seed whose rolled IVs match the requested non-31 values; requested 31s
+        // are Hyper Trained (Lv50+). Runs before the nature block so that block can
+        // mint the requested nature if the seed's nature differs.
+        // ============================================================================
+        bool zaIVsApplied = false;
+        if (userSpecifiedIVs && pk is PA9 pa9IVs)
+        {
+            // "Hypertrain: False" normalizes to ".HyperTrainFlags=0" — then requested 31s must come from the seed.
+            bool allowHT = !contentLines.Any(l => l.Trim().Equals(".HyperTrainFlags=0", StringComparison.OrdinalIgnoreCase));
+            if (ZAIVSeedSearch.TryApplyRequestedIVs(ref pa9IVs, set.IVs, set.Nature, allowHT))
+            {
+                pk = (T)(PKM)pa9IVs;
+                zaIVsApplied = true;
+            }
+        }
+        // ============================================================================
+        // END OF ZA CUSTOM IV SEED SEARCH
+        // ============================================================================
+
+        // ============================================================================
         // ZA NATURE LEGALITY ENFORCEMENT
         // ============================================================================
         // For ZA (PA9) Pokemon, honor the user's requested nature if it passes legality.
         // If the requested nature is illegal for the encounter (e.g. Zeraora must be Brave),
         // keep PKHeX's legal nature as the actual Nature and apply the requested nature as
-        // StatNature only (mint effect).
+        // StatAlignment only (mint effect).
         //
         // Example 1: Zeraora (ZA native, forced Brave) + user requests Adamant
-        //            → Nature=Brave, StatNature=Adamant
+        //            → Nature=Brave, StatAlignment=Adamant
         // Example 2: Charmander (SWSH via HOME fallback) + user requests Timid
-        //            → Nature=Timid, StatNature=Timid
-        // Example 3: No nature requested, only StatNature via batch (.StatNature=X)
-        //            → Nature=PKHeX default, StatNature=X (already set by ALM)
+        //            → Nature=Timid, StatAlignment=Timid
+        // Example 3: No nature requested, only StatAlignment via batch (.StatAlignment=X)
+        //            → Nature=PKHeX default, StatAlignment=X (already set by ALM)
         // Example 4: Nothing requested → ALM picks, no change.
         // ============================================================================
         if (pk is PA9)
@@ -760,27 +832,27 @@ public static class Helpers<T> where T : PKM, new()
             Nature requestedNature = set.Nature;
             bool userRequestedNature = requestedNature != Nature.Random;
 
-            // Detect if the user explicitly set a StatNature via .StatNature= batch command.
-            // IMPORTANT: We parse the content string directly rather than comparing pk.StatNature != pk.Nature.
-            // After ALM generation and/or HOME conversion the StatNature byte can differ from Nature as
+            // Detect if the user explicitly set a StatAlignment via .StatAlignment= batch command.
+            // IMPORTANT: We parse the content string directly rather than comparing pk.StatAlignment != pk.Nature.
+            // After ALM generation and/or HOME conversion the StatAlignment byte can differ from Nature as
             // a format-conversion artifact — checking PKM fields would misidentify that as a user request.
-            Nature? userExplicitStatNature = null;
+            Nature? userExplicitStatAlignment = null;
             foreach (var line in contentLines)
             {
                 var trimmed = line.Trim();
-                if (trimmed.StartsWith(".StatNature=", StringComparison.OrdinalIgnoreCase))
+                if (trimmed.StartsWith(".StatAlignment=", StringComparison.OrdinalIgnoreCase))
                 {
-                    var value = trimmed[".StatNature=".Length..].Trim();
+                    var value = trimmed[".StatAlignment=".Length..].Trim();
                     if (Enum.TryParse<Nature>(value, ignoreCase: true, out var parsedSN))
                     {
-                        userExplicitStatNature = parsedSN;
+                        userExplicitStatAlignment = parsedSN;
                         break;
                     }
                 }
             }
 
-            bool hasExplicitStatNature = userExplicitStatNature.HasValue;
-            Nature userStatNature = userExplicitStatNature ?? Nature.Random;
+            bool hasExplicitStatAlignment = userExplicitStatAlignment.HasValue;
+            Nature userStatAlignment = userExplicitStatAlignment ?? Nature.Random;
 
             if (userRequestedNature && requestedNature != pk.Nature)
             {
@@ -788,63 +860,63 @@ public static class Helpers<T> where T : PKM, new()
                 // Test whether the user's requested nature is legal for this encounter.
                 var clone = (PA9)pk.Clone();
                 clone.Nature = requestedNature;
-                clone.StatNature = hasExplicitStatNature ? userStatNature : requestedNature;
+                clone.StatAlignment = hasExplicitStatAlignment ? userStatAlignment : requestedNature;
                 clone.RefreshChecksum();
 
                 if (new LegalityAnalysis(clone).Valid)
                 {
-                    // Legal — apply the requested nature to both Nature and StatNature.
+                    // Legal — apply the requested nature to both Nature and StatAlignment.
                     pk.Nature = clone.Nature;
-                    pk.StatNature = clone.StatNature;
+                    pk.StatAlignment = clone.StatAlignment;
                     pk.RefreshChecksum();
                     LogUtil.LogInfo(
-                        $"{(Species)pk.Species}: Requested nature {requestedNature} is legal — applied.",
+                        $"{(Species)pk.Species}: Requested nature of {requestedNature} is legal for the set and is applied.",
                         "ZANature");
                 }
                 else
                 {
                     // Requested nature is illegal for this encounter.
-                    // Try minting: keep the forced Nature but apply requested nature as StatNature.
+                    // Try minting: keep the forced Nature but apply requested nature as StatAlignment.
                     // Verify the mint itself is legal before applying — some encounters (e.g. certain
-                    // HOME-converted WC8 events) restrict StatNature via shiny/nature correlation checks
-                    // and will also reject a mismatched StatNature.
-                    var wantedStatNature = hasExplicitStatNature ? userStatNature : requestedNature;
+                    // HOME-converted WC8 events) restrict StatAlignment via shiny/nature correlation checks
+                    // and will also reject a mismatched StatAlignment.
+                    var wantedStatAlignment = hasExplicitStatAlignment ? userStatAlignment : requestedNature;
                     var cloneMint = (PA9)pk.Clone();
-                    cloneMint.StatNature = wantedStatNature;
+                    cloneMint.StatAlignment = wantedStatAlignment;
                     cloneMint.RefreshChecksum();
 
                     if (new LegalityAnalysis(cloneMint).Valid)
                     {
                         // Mint is legal — apply it.
-                        pk.StatNature = wantedStatNature;
+                        pk.StatAlignment = wantedStatAlignment;
                         pk.RefreshChecksum();
                         LogUtil.LogInfo(
-                            $"{(Species)pk.Species}: Requested nature {requestedNature} is illegal for this encounter. " +
-                            $"Mint applied: Nature={pk.Nature}, StatNature={pk.StatNature}.",
+                            $"{(Species)pk.Species}: Requested nature of {requestedNature} is illegal for this encounter." +
+                            $"Mint Applied! Nature: {pk.Nature} | Stat Nature: {pk.StatAlignment}.",
                             "ZANature");
                     }
                     else
                     {
-                        // Minting is also restricted (e.g. shiny-correlation check ties StatNature to Nature).
-                        // Leave Nature and StatNature exactly as PKHeX produced them — both forced.
+                        // Minting is also restricted (e.g. shiny-correlation check ties StatAlignment to Nature).
+                        // Leave Nature and StatAlignment exactly as PKHeX produced them — both forced.
                         LogUtil.LogInfo(
-                            $"{(Species)pk.Species}: Requested nature {requestedNature} is illegal and minting is " +
-                            $"restricted for this encounter. Keeping forced Nature={pk.Nature}, StatNature={pk.StatNature}.",
+                            $"{(Species)pk.Species}: Requested nature of {requestedNature} is illegal and minting is " +
+                            $"restricted for this encounter. Keeping forced nature of {pk.Nature} with Stat Nature of {pk.StatAlignment}.",
                             "ZANature");
                     }
                 }
             }
             else if (userRequestedNature && requestedNature == pk.Nature)
             {
-                // User's requested nature matches what was generated — mirror to StatNature
-                // unless the user already set a different StatNature via batch command.
-                if (!hasExplicitStatNature)
+                // User's requested nature matches what was generated — mirror to StatAlignment
+                // unless the user already set a different StatAlignment via batch command.
+                if (!hasExplicitStatAlignment)
                 {
-                    pk.StatNature = pk.Nature;
+                    pk.StatAlignment = pk.Nature;
                     pk.RefreshChecksum();
                 }
             }
-            // Else: no nature was requested — leave Nature and StatNature exactly as ALM set them.
+            // Else: no nature was requested — leave Nature and StatAlignment exactly as ALM set them.
         }
         // ============================================================================
         // END OF ZA NATURE LEGALITY ENFORCEMENT
@@ -860,7 +932,7 @@ public static class Helpers<T> where T : PKM, new()
         // same reliability as the direct batch command approach.
         // Only reverts if the user's IV spread is genuinely illegal for this encounter
         // ============================================================================
-        if (userSpecifiedIVs)
+        if (userSpecifiedIVs && !zaIVsApplied)
         {
             int[] requestedIVs = ParseShowdownIVLine(contentLines);
             if (requestedIVs.Any(v => v >= 0))
@@ -886,6 +958,27 @@ public static class Helpers<T> where T : PKM, new()
         // choice is not overwritten by finalLanguage here.
         PrepareForTrade(pk, set, effectiveLanguage);
 
+        // Apply user-supplied OT/TID/SID from the Showdown set (after PrepareForTrade
+        // has finalized language/nickname/Asian-OT handling). Reverts to the
+        // pre-override state if the result fails legality so we never ship an
+        // illegal trade — for fixed-OT encounters the bot defaults survive.
+        if (userOT is not null || userTID is not null || userSID is not null)
+        {
+            // Respect the AllowTrainerDataOverride config flag. When disabled, the
+            // OT/TID/SID lines were already stripped from the set above, so we simply
+            // skip re-applying them and let the bot's generated trainer info stand.
+            if (Info.Hub.Config.Legality.AllowTrainerDataOverride)
+            {
+                LogUtil.LogInfo($"Trade TrainerOverride = Requested OT: {userOT} | Requested TID: {userTID} | Requested SID: {userSID} | Species: {pk.Species} | Before OT: {pk.OriginalTrainerName} | Before TID: {pk.TrainerTID7} | Before SID: {pk.TrainerSID7}", "TrainerOverride");
+                ApplyUserTrainerOverride(pk, userOT, userTID, userSID);
+                LogUtil.LogInfo($"Trade TrainerOverride = Final OT: {pk.OriginalTrainerName} | Final TID: {pk.TrainerTID7} | Final SID: {pk.TrainerSID7} | Legal: {new LegalityAnalysis(pk).Valid}", "TrainerOverride");
+            }
+            else
+            {
+                LogUtil.LogInfo($"Trade TrainerOverride = SKIPPED — AllowTrainerDataOverride is disabled. Ignoring requested OT: {userOT} | TID: {userTID} | SID: {userSID} | Species: {pk.Species}", "TrainerOverride");
+            }
+        }
+
         // Check for spam names
         if (Info.Hub.Config.Trade.TradeConfiguration.EnableSpamCheck)
         {
@@ -893,7 +986,7 @@ public static class Helpers<T> where T : PKM, new()
             {
                 return Task.FromResult(new ProcessedPokemonResult<T>
                 {
-                    Error = "Detected Adname in the Pokémon's name or trainer name, which is not allowed.",
+                    Error = "Detected Admon URL in the Pokémon's name or OT, which is not allowed.",
                     ShowdownSet = set
                 });
             }
@@ -970,6 +1063,52 @@ public static class Helpers<T> where T : PKM, new()
         }
 
         pk.ResetPartyStats();
+    }
+
+    /// Applies user-supplied OT/TID/SID from the Showdown set onto the final PKM.
+    /// Captures shiny state before mutating IDs so the PID can be rebuilt against
+    /// the new TID/SID — without this, pk.IsShiny re-evaluates against the new IDs
+    /// with the old PID and silently reads false, dropping the shiny we generated.
+    /// Reverts every field on legality failure so the bot never ships an illegal
+    /// trade for fixed-OT encounters (events, in-game trades, Mystery Gifts).
+    private static void ApplyUserTrainerOverride(T pk, string? ot, uint? tid, uint? sid)
+    {
+        var backup = pk.Clone();
+        bool wasShiny = backup.IsShiny;
+        uint originalShinyXor = backup.ShinyXor;
+
+        if (ot is not null)
+        {
+            // Clear the trash buffer first — PKHeX's OriginalTrainerName setter
+            // writes the new chars + null terminator but does NOT zero out bytes
+            // past the new null. Replacing "FreeMons.Org" (12) with "Chris" (5)
+            // leaves "ns.Org\0" in the buffer, which the Trainer legality check
+            // flags as invalid trash.
+            pk.OriginalTrainerTrash.Clear();
+            pk.OriginalTrainerName = ot;
+        }
+        if (tid is not null)
+            pk.TrainerTID7 = tid.Value;
+        if (sid is not null)
+            pk.TrainerSID7 = sid.Value;
+
+        if (wasShiny && (tid is not null || sid is not null))
+            pk.PID = (uint)((pk.TID16 ^ pk.SID16 ^ (pk.PID & 0xFFFF) ^ originalShinyXor) << 16) | (pk.PID & 0xFFFF);
+
+        pk.RefreshChecksum();
+
+        var la = new LegalityAnalysis(pk);
+        if (!la.Valid)
+        {
+            var fails = string.Join("; ", la.Results.Where(r => !r.Valid).Select(r => $"{r.Identifier}"));
+            LogUtil.LogInfo($"TrainerOverride: REVERT — legality failed: {fails}", "TrainerOverride");
+            pk.OriginalTrainerTrash.Clear();
+            backup.OriginalTrainerTrash.CopyTo(pk.OriginalTrainerTrash);
+            pk.TrainerTID7 = backup.TrainerTID7;
+            pk.TrainerSID7 = backup.TrainerSID7;
+            pk.PID = backup.PID;
+            pk.RefreshChecksum();
+        }
     }
 
     private static int ValidateLanguageForGame(PKM pk, byte requestedLanguage)
