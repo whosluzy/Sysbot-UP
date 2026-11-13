@@ -11,7 +11,7 @@ Fork of `kwsch/SysBot.NET` (via `Secludedly/FusionBot` and `hexbyt3/PokeBot`), b
    - `UpdateChecker.cs`: `RepositoryOwner = "whosluzy"`, `RepositoryName = "Sysbot-UP"`, User-Agent = `"PokedexMasterBot"` — must point to this fork, not upstream.
    - `UpdateForm.cs`: User-Agent = `"PokedexMasterBot"`.
    - `SysBot.Pokemon.WinForms.csproj`: `AssemblyName` must be `PokedexMasterBot`; the rename target must produce `PokedexMasterBot_x.x.x.exe` (not `FusionBot_x.x.x.exe`). Without this the CI release has no exe.
-   - `DiscordSettings.cs`: `FreeTradeLimitMinutes` and `RolesExemptFromCooldown` properties must exist (see Free-user trade limit section).
+   - `DiscordSettings.cs`: `FreeTradeWaitMinutes` and `RolesExemptFromCooldown` properties must exist (see Free-user trade limit section).
    - `TradeCooldownTracker.cs` must exist in `SysBot.Pokemon.Discord/Helpers/`, all limit checks must be wired up, and `DiscordTradeNotifier.TradeFinished` must record the completed trade (see Free-user trade limit section).
 
 ## Workflow
@@ -30,9 +30,9 @@ Fork of `kwsch/SysBot.NET` (via `Secludedly/FusionBot` and `hexbyt3/PokeBot`), b
 
 ## Free-user trade limit
 
-Free users (no role in `RolesExemptFromCooldown`, e.g. no Premium) get **1 completed trade per hour**. Lives in `SysBot.Pokemon.Discord/Helpers/TradeCooldownTracker.cs`. Settings in `DiscordSettings.cs`:
+Free users (no role in `RolesExemptFromCooldown`, e.g. no Premium) get **1 completed trade per 30 minutes**. Lives in `SysBot.Pokemon.Discord/Helpers/TradeCooldownTracker.cs`. Settings in `DiscordSettings.cs`:
 
-- **Free User Trade Limit (Minutes)** — `FreeTradeLimitMinutes` (Operation category, default 60, 0 disables). Replaced the old `TradeCooldownMinutes` (10 min, counted at queue time).
+- **Free User Trade Limit (Minutes)** — `FreeTradeWaitMinutes` (Operation category, default 30, 0 disables). Replaced `FreeTradeLimitMinutes` (default 60) and before that `TradeCooldownMinutes` (10 min, counted at queue time) — renamed each time so existing configs pick up the new default without manual edits.
 - **Roles With Unlimited Trades** — `RolesExemptFromCooldown` (Roles category, role IDs or names). Property name kept so existing configs keep their Premium role.
 
 **A trade only counts once it concludes with the user.** Recording happens in exactly one place: `DiscordTradeNotifier.TradeFinished` → `TradeCooldownTracker.RecordCompletedTrade(Trader.Id)`. Every game's trade bot calls `TradeFinished` only after the box checksum changed (trade really happened). Dump and Seed types are skipped (nothing handed over). Never record at queue time — sent codes, cancels, timeouts and no-shows must not count.

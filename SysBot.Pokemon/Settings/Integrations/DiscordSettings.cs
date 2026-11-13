@@ -183,7 +183,7 @@ public class DiscordSettings
     public RemoteControlAccessList UserBlacklist { get; set; } = new();
 
     [Category(Operation), Description("Free users (no exempt role) get 1 completed trade per this many minutes. Only trades that actually finish with the user count — sent codes, cancels and no-shows do not. Set to 0 to disable."), DisplayName("Free User Trade Limit (Minutes)")]
-    public int FreeTradeLimitMinutes { get; set; } = 60;
+    public int FreeTradeWaitMinutes { get; set; } = 30;
 
     [Category(Roles), Description("Users with these roles (e.g. Premium) have unlimited trades and skip the free-user trade limit."), DisplayName("Roles With Unlimited Trades")]
     public RemoteControlAccessList RolesExemptFromCooldown { get; set; } = new() { AllowIfEmpty = false };

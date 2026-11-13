@@ -210,10 +210,10 @@ public static class CreatePokemonHelper
         // Free-user trade limit (slash command — uses true ephemeral). Completed trades are recorded in DiscordTradeNotifier.TradeFinished.
         var discordCfg = SysCord<T>.Runner.Config.Discord;
         bool exempt = TradeCooldownTracker.IsExempt(context.User, discordCfg);
-        if (discordCfg.FreeTradeLimitMinutes > 0 && !exempt
-            && TradeCooldownTracker.IsOnCooldown(userID, discordCfg.FreeTradeLimitMinutes, out var unlocksAt))
+        if (discordCfg.FreeTradeWaitMinutes > 0 && !exempt
+            && TradeCooldownTracker.IsOnCooldown(userID, discordCfg.FreeTradeWaitMinutes, out var unlocksAt))
         {
-            var cdEmbed = TradeCooldownTracker.BuildCooldownEmbed(unlocksAt, discordCfg.FreeTradeLimitMinutes);
+            var cdEmbed = TradeCooldownTracker.BuildCooldownEmbed(unlocksAt, discordCfg.FreeTradeWaitMinutes);
             await context.Interaction.FollowupAsync(embed: cdEmbed, ephemeral: true).ConfigureAwait(false);
             return false;
         }

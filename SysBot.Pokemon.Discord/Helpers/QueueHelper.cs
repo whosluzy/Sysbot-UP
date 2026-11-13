@@ -761,14 +761,14 @@ public static class QueueHelper<T> where T : PKM, new()
     internal static async Task<bool> EnforceCooldown(SocketCommandContext context, SocketUser trader, ulong userID)
     {
         var cfg = SysCord<T>.Runner.Config.Discord;
-        if (cfg.FreeTradeLimitMinutes <= 0)
+        if (cfg.FreeTradeWaitMinutes <= 0)
             return false;
         if (TradeCooldownTracker.IsExempt(trader, cfg))
             return false;
-        if (!TradeCooldownTracker.IsOnCooldown(userID, cfg.FreeTradeLimitMinutes, out var unlocksAt))
+        if (!TradeCooldownTracker.IsOnCooldown(userID, cfg.FreeTradeWaitMinutes, out var unlocksAt))
             return false;
 
-        var embed = TradeCooldownTracker.BuildCooldownEmbed(unlocksAt, cfg.FreeTradeLimitMinutes);
+        var embed = TradeCooldownTracker.BuildCooldownEmbed(unlocksAt, cfg.FreeTradeWaitMinutes);
 
         IUserMessage? sent = null;
         try
