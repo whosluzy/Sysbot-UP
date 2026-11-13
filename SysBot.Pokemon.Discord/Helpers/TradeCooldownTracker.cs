@@ -9,7 +9,13 @@ namespace SysBot.Pokemon.Discord;
 
 public static class TradeCooldownTracker
 {
+    // Last completed trade per Discord account.
     private static readonly ConcurrentDictionary<ulong, DateTime> _lastTrade = new();
+
+    // Last completed trade per in-game trainer (TID + SID), so a second Discord account
+    // used with the same game save shares the same limit. TID/SID come from tradecodes.json,
+    // which the trade bots already fill in during every trade — nothing extra is read from the Switch.
+    private static readonly ConcurrentDictionary<long, DateTime> _lastTradeByTrainer = new();
 
     // Periodic sweep so entries from users who never come back don't sit in memory forever.
     private static readonly Timer _sweepTimer = new(_ => Sweep(), null, TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30));
@@ -19,30 +25,66 @@ public static class TradeCooldownTracker
         minutesRemaining = 0;
         if (cooldownMinutes <= 0)
             return false;
-        if (_lastTrade.TryGetValue(userId, out var last))
+        var cooldown = TimeSpan.FromMinutes(cooldownMinutes);
+
+        var left = Remaining(_lastTrade, userId, cooldown);
+        if (TryGetTrainerKey(userId, out var trainerKey))
         {
-            var elapsed = DateTime.UtcNow - last;
-            var cooldown = TimeSpan.FromMinutes(cooldownMinutes);
-            if (elapsed < cooldown)
-            {
-                minutesRemaining = Math.Max(1, (int)Math.Ceiling((cooldown - elapsed).TotalMinutes));
-                return true;
-            }
-            // Cooldown has expired — drop the entry so memory doesn't grow.
-            _lastTrade.TryRemove(userId, out _);
+            var trainerLeft = Remaining(_lastTradeByTrainer, trainerKey, cooldown);
+            if (trainerLeft > left)
+                left = trainerLeft;
         }
-        return false;
+
+        if (left <= TimeSpan.Zero)
+            return false;
+        minutesRemaining = Math.Max(1, (int)Math.Ceiling(left.TotalMinutes));
+        return true;
     }
 
     /// <summary>
-    /// Records a trade that actually concluded with this user. Called only from DiscordTradeNotifier.TradeFinished —
-    /// never at queue time, so sent codes, cancels and no-shows don't use up a free user's trade.
+    /// Records a trade that actually concluded with this user — called only from DiscordTradeNotifier.TradeFinished,
+    /// right before "Trade finished. Enjoy!" is sent. Never at queue time, so sent codes, cancels and no-shows don't count.
+    /// Recorded under both the Discord ID and the trainer's saved TID/SID.
     /// </summary>
-    public static void RecordCompletedTrade(ulong userId) => _lastTrade[userId] = DateTime.UtcNow;
+    public static void RecordCompletedTrade(ulong userId)
+    {
+        var now = DateTime.UtcNow;
+        _lastTrade[userId] = now;
+        if (TryGetTrainerKey(userId, out var trainerKey))
+            _lastTradeByTrainer[trainerKey] = now;
+    }
+
+    private static TimeSpan Remaining<TKey>(ConcurrentDictionary<TKey, DateTime> map, TKey key, TimeSpan cooldown) where TKey : notnull
+    {
+        if (!map.TryGetValue(key, out var last))
+            return TimeSpan.Zero;
+        var left = cooldown - (DateTime.UtcNow - last);
+        if (left <= TimeSpan.Zero)
+            map.TryRemove(key, out _); // expired — drop it so memory doesn't grow
+        return left;
+    }
+
+    // Trainer key = TID and SID packed together. Same TID with a different SID is a different trainer.
+    private static bool TryGetTrainerKey(ulong userId, out long key)
+    {
+        key = 0;
+        try
+        {
+            var details = new TradeCodeStorage().GetTradeDetails(userId);
+            if (details is null || (details.TID == 0 && details.SID == 0))
+                return false;
+            key = ((long)details.TID << 32) | (uint)details.SID;
+            return true;
+        }
+        catch
+        {
+            return false; // unreadable tradecodes.json — fall back to the Discord ID only
+        }
+    }
 
     public static void ClearCooldown(ulong userId) => _lastTrade.TryRemove(userId, out _);
 
-    public static void ClearAll() => _lastTrade.Clear();
+    public static void ClearAll() { _lastTrade.Clear(); _lastTradeByTrainer.Clear(); }
 
     public static bool IsExempt(SocketUser user, DiscordSettings cfg)
     {
@@ -80,6 +122,11 @@ public static class TradeCooldownTracker
         {
             if (kvp.Value < cutoff)
                 _lastTrade.TryRemove(kvp.Key, out _);
+        }
+        foreach (var kvp in _lastTradeByTrainer)
+        {
+            if (kvp.Value < cutoff)
+                _lastTradeByTrainer.TryRemove(kvp.Key, out _);
         }
     }
 }
