@@ -291,6 +291,11 @@ public class DiscordTradeNotifier<T> : IPokeTradeNotifier<T>, IDisposable
 
     public void TradeFinished(PokeRoutineExecutor<T> routine, PokeTradeDetail<T> info, T result)
     {
+        // Free-user trade limit: a trade only counts once the bot has confirmed it concluded with this user.
+        // Dumps and seed checks hand nothing over, so they don't count.
+        if (info.Type is not (PokeTradeType.Dump or PokeTradeType.Seed))
+            TradeCooldownTracker.RecordCompletedTrade(Trader.Id);
+
         // Only stop updates and invoke OnFinish for single trades or the last trade in a batch
         if (TotalBatchTrades <= 1 || BatchTradeNumber == TotalBatchTrades)
         {

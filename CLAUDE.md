@@ -11,15 +11,15 @@ Fork of `kwsch/SysBot.NET` (via `Secludedly/FusionBot` and `hexbyt3/PokeBot`), b
    - `UpdateChecker.cs`: `RepositoryOwner = "whosluzy"`, `RepositoryName = "Sysbot-UP"`, User-Agent = `"PokedexMasterBot"` — must point to this fork, not upstream.
    - `UpdateForm.cs`: User-Agent = `"PokedexMasterBot"`.
    - `SysBot.Pokemon.WinForms.csproj`: `AssemblyName` must be `PokedexMasterBot`; the rename target must produce `PokedexMasterBot_x.x.x.exe` (not `FusionBot_x.x.x.exe`). Without this the CI release has no exe.
-   - `DiscordSettings.cs`: `TradeCooldownMinutes` and `RolesExemptFromCooldown` properties must exist (see Trade cooldown system section).
-   - `TradeCooldownTracker.cs` must exist in `SysBot.Pokemon.Discord/Helpers/` and all cooldown enforcement points must be wired up (see Trade cooldown system section).
+   - `DiscordSettings.cs`: `FreeTradeLimitMinutes` and `RolesExemptFromCooldown` properties must exist (see Free-user trade limit section).
+   - `TradeCooldownTracker.cs` must exist in `SysBot.Pokemon.Discord/Helpers/`, all limit checks must be wired up, and `DiscordTradeNotifier.TradeFinished` must record the completed trade (see Free-user trade limit section).
 
 ## Workflow
 
 - **Local build before commit**: run `dotnet build SysBot.Pokemon.WinForms/SysBot.Pokemon.WinForms.csproj -c Release --no-restore` and confirm no errors. The CI build is slow; compile errors there waste a release cycle.
 - **Ask before pushing**: after the code changes are done and the local build is clean, ask the user "Do you want to make any other changes before I push?" Do not push without explicit confirmation.
 - **Rebase on push reject**: CI auto-bumps the patch version in `SysBot.Pokemon/Helpers/TradeBot.cs` and commits `[skip ci]`. If `git push` is rejected, run `git pull origin main --rebase` then push again.
-- **Commit messages**: short, present-tense summary; use PowerShell here-string syntax (`@'...'@`) — do NOT use Bash heredoc `$(cat <<EOF...)`. Include `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>` on the last line.
+- **Commit messages**: short, present-tense summary; use PowerShell here-string syntax (`@'...'@`) — do NOT use Bash heredoc `$(cat <<EOF...)`. Do NOT add a `Co-Authored-By: Claude` trailer — commits go out under the owner's own name (whosluzy).
 
 ## CI / release
 
@@ -28,23 +28,25 @@ Fork of `kwsch/SysBot.NET` (via `Secludedly/FusionBot` and `hexbyt3/PokeBot`), b
 - Output exe is renamed by the .csproj target to `PokedexMasterBot_<version>.exe`.
 - `AssemblyName` is `PokedexMasterBot` (so the process name matches port-file lookups in `BotServer.cs`).
 
-## Trade cooldown system
+## Free-user trade limit
 
-Centralized 10-minute cooldown (configurable). Lives in `SysBot.Pokemon.Discord/Helpers/TradeCooldownTracker.cs`. Settings exposed in `DiscordSettings.cs`:
+Free users (no role in `RolesExemptFromCooldown`, e.g. no Premium) get **1 completed trade per hour**. Lives in `SysBot.Pokemon.Discord/Helpers/TradeCooldownTracker.cs`. Settings in `DiscordSettings.cs`:
 
-- **Trade Cooldown (Minutes)** (Operation category, default 10, 0 disables)
-- **Roles Exempt From Cooldown** (Roles category, list of role IDs or names)
+- **Free User Trade Limit (Minutes)** — `FreeTradeLimitMinutes` (Operation category, default 60, 0 disables). Replaced the old `TradeCooldownMinutes` (10 min, counted at queue time).
+- **Roles With Unlimited Trades** — `RolesExemptFromCooldown` (Roles category, role IDs or names). Property name kept so existing configs keep their Premium role.
 
-Enforcement points (must check BEFORE sending trade-code DM, and record only on `QueueResultAdd.Added`):
+**A trade only counts once it concludes with the user.** Recording happens in exactly one place: `DiscordTradeNotifier.TradeFinished` → `TradeCooldownTracker.RecordCompletedTrade(Trader.Id)`. Every game's trade bot calls `TradeFinished` only after the box checksum changed (trade really happened). Dump and Seed types are skipped (nothing handed over). Never record at queue time — sent codes, cancels, timeouts and no-shows must not count.
 
-- `QueueHelper.AddToQueueAsync` (public, main path) — check at top via `EnforceCooldown(...)`, record inside private `AddToTradeQueue` via `RecordCooldownIfApplicable(...)`.
-- `QueueHelper.AddBatchContainerToQueueAsync` × 3 batch variants — same pattern.
+Checks (block BEFORE sending the trade-code DM):
+
+- `QueueHelper.AddToQueueAsync` (public, main path) — `EnforceCooldown(...)` at top.
+- `QueueHelper.AddBatchContainerToQueueAsync` × 3 batch variants — same.
 - `MysteryEggModule.ProcessBatchMysteryEggs` — calls `QueueHelper<T>.EnforceCooldown` directly.
-- `CreatePokemonHelper` (slash command) — inline check using `TradeCooldownTracker.IsExempt` + `IsOnCooldown`, sends ephemeral followup with `BuildCooldownEmbed`.
+- `CreatePokemonHelper` (slash command) — inline `IsExempt` + `IsOnCooldown`, ephemeral followup with `BuildCooldownEmbed`.
 
-Cooldown message: friendly orange embed with the Patreon upsell + 3-step guide. Patreon URL: `https://www.patreon.com/c/pokedexmasters/membership`. Does NOT auto-delete (user dismisses).
+A batch (up to 6 Pokémon) counts as one trade. Tracking is in-memory per bot process (a restart clears it).
 
-Cleanup: `IsOnCooldown` removes expired entries lazily; a 30-minute background `Timer` sweeps anything older than 1 hour.
+Limit message: friendly orange embed with the Patreon upsell + 3-step guide. Patreon URL: `https://www.patreon.com/c/pokedexmasters/membership`. Does NOT auto-delete (user dismisses).
 
 ## Key file locations
 

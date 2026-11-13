@@ -132,9 +132,6 @@ public static class QueueHelper<T> where T : PKM, new()
         var isSudo = sig == RequestSignificance.Owner;
         var added = Info.AddToTradeQueue(trade, userID, false, isSudo);
 
-        if (added == QueueResultAdd.Added)
-            RecordCooldownIfApplicable(trader, userID);
-
         // Start queue position updates for Discord notification
         if (added != QueueResultAdd.AlreadyInQueue && added != QueueResultAdd.NotAllowedItem && notifier is DiscordTradeNotifier<T> discordNotifier)
         {
@@ -343,9 +340,6 @@ public static class QueueHelper<T> where T : PKM, new()
 
         var added = Info.AddToTradeQueue(trade, userID, false, sig == RequestSignificance.Owner);
 
-        if (added == QueueResultAdd.Added)
-            RecordCooldownIfApplicable(trader, userID);
-
         // Send trade code once
         await EmbedHelper.SendTradeCodeEmbedAsync(trader, code).ConfigureAwait(false);
 
@@ -536,9 +530,6 @@ public static class QueueHelper<T> where T : PKM, new()
 
         var added = Info.AddToTradeQueue(trade, userID, false, sig == RequestSignificance.Owner);
 
-        if (added == QueueResultAdd.Added)
-            RecordCooldownIfApplicable(trader, userID);
-
         await EmbedHelper.SendTradeCodeEmbedAsync(trader, code).ConfigureAwait(false);
 
         if (added != QueueResultAdd.AlreadyInQueue && added != QueueResultAdd.NotAllowedItem && notifier is DiscordTradeNotifier<T> discordNotifier)
@@ -658,9 +649,6 @@ public static class QueueHelper<T> where T : PKM, new()
 
         var added = Info.AddToTradeQueue(trade, userID, false, sig == RequestSignificance.Owner);
 
-        if (added == QueueResultAdd.Added)
-            RecordCooldownIfApplicable(trader, userID);
-
         // Send trade code once
         await EmbedHelper.SendTradeCodeEmbedAsync(trader, code).ConfigureAwait(false);
 
@@ -766,18 +754,21 @@ public static class QueueHelper<T> where T : PKM, new()
         }
     }
 
-    /// <summary>Returns true if the user is on cooldown (and notifies them). False to proceed.</summary>
+    /// <summary>
+    /// Returns true if a free user already completed a trade inside the limit window (and notifies them). False to proceed.
+    /// Only completed trades count — they are recorded in DiscordTradeNotifier.TradeFinished, never at queue time.
+    /// </summary>
     internal static async Task<bool> EnforceCooldown(SocketCommandContext context, SocketUser trader, ulong userID)
     {
         var cfg = SysCord<T>.Runner.Config.Discord;
-        if (cfg.TradeCooldownMinutes <= 0)
+        if (cfg.FreeTradeLimitMinutes <= 0)
             return false;
         if (TradeCooldownTracker.IsExempt(trader, cfg))
             return false;
-        if (!TradeCooldownTracker.IsOnCooldown(userID, cfg.TradeCooldownMinutes, out int minsLeft))
+        if (!TradeCooldownTracker.IsOnCooldown(userID, cfg.FreeTradeLimitMinutes, out int minsLeft))
             return false;
 
-        var embed = TradeCooldownTracker.BuildCooldownEmbed(minsLeft);
+        var embed = TradeCooldownTracker.BuildCooldownEmbed(minsLeft, cfg.FreeTradeLimitMinutes);
 
         IUserMessage? sent = null;
         try
@@ -793,16 +784,6 @@ public static class QueueHelper<T> where T : PKM, new()
         try { await context.Message.DeleteAsync().ConfigureAwait(false); } catch { }
 
         return true;
-    }
-
-    internal static void RecordCooldownIfApplicable(SocketUser trader, ulong userID)
-    {
-        var cfg = SysCord<T>.Runner.Config.Discord;
-        if (cfg.TradeCooldownMinutes <= 0)
-            return;
-        if (TradeCooldownTracker.IsExempt(trader, cfg))
-            return;
-        TradeCooldownTracker.RecordTrade(userID);
     }
 
     private static int GenerateUniqueTradeID()

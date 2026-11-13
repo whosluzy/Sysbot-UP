@@ -207,22 +207,19 @@ public static class CreatePokemonHelper
 
         var trade = new TradeEntry<T>(detail, userID, PokeRoutineType.LinkTrade, context.User.Username, uniqueTradeID);
 
-        // Cooldown check (slash command — uses true ephemeral)
+        // Free-user trade limit (slash command — uses true ephemeral). Completed trades are recorded in DiscordTradeNotifier.TradeFinished.
         var discordCfg = SysCord<T>.Runner.Config.Discord;
         bool exempt = TradeCooldownTracker.IsExempt(context.User, discordCfg);
-        if (discordCfg.TradeCooldownMinutes > 0 && !exempt
-            && TradeCooldownTracker.IsOnCooldown(userID, discordCfg.TradeCooldownMinutes, out int minsLeft))
+        if (discordCfg.FreeTradeLimitMinutes > 0 && !exempt
+            && TradeCooldownTracker.IsOnCooldown(userID, discordCfg.FreeTradeLimitMinutes, out int minsLeft))
         {
-            var cdEmbed = TradeCooldownTracker.BuildCooldownEmbed(minsLeft);
+            var cdEmbed = TradeCooldownTracker.BuildCooldownEmbed(minsLeft, discordCfg.FreeTradeLimitMinutes);
             await context.Interaction.FollowupAsync(embed: cdEmbed, ephemeral: true).ConfigureAwait(false);
             return false;
         }
 
         // Add to queue
         var added = Info.AddToTradeQueue(trade, userID, false, sig == RequestSignificance.Owner);
-
-        if (added == QueueResultAdd.Added && discordCfg.TradeCooldownMinutes > 0 && !exempt)
-            TradeCooldownTracker.RecordTrade(userID);
 
         if (added == QueueResultAdd.AlreadyInQueue)
         {

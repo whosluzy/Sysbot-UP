@@ -182,10 +182,10 @@ public class DiscordSettings
     [Category(Users), Description("Users with these user IDs cannot use the bot."), DisplayName("User Blacklist")]
     public RemoteControlAccessList UserBlacklist { get; set; } = new();
 
-    [Category(Operation), Description("Minutes a user must wait between trades. Set to 0 to disable."), DisplayName("Trade Cooldown (Minutes)")]
-    public int TradeCooldownMinutes { get; set; } = 10;
+    [Category(Operation), Description("Free users (no exempt role) get 1 completed trade per this many minutes. Only trades that actually finish with the user count — sent codes, cancels and no-shows do not. Set to 0 to disable."), DisplayName("Free User Trade Limit (Minutes)")]
+    public int FreeTradeLimitMinutes { get; set; } = 60;
 
-    [Category(Roles), Description("Users with these roles bypass the trade cooldown."), DisplayName("Roles Exempt From Cooldown")]
+    [Category(Roles), Description("Users with these roles (e.g. Premium) have unlimited trades and skip the free-user trade limit."), DisplayName("Roles With Unlimited Trades")]
     public RemoteControlAccessList RolesExemptFromCooldown { get; set; } = new() { AllowIfEmpty = false };
 
     public override string ToString() => "Discord Integration Settings";

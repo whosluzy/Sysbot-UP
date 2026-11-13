@@ -34,7 +34,11 @@ public static class TradeCooldownTracker
         return false;
     }
 
-    public static void RecordTrade(ulong userId) => _lastTrade[userId] = DateTime.UtcNow;
+    /// <summary>
+    /// Records a trade that actually concluded with this user. Called only from DiscordTradeNotifier.TradeFinished —
+    /// never at queue time, so sent codes, cancels and no-shows don't use up a free user's trade.
+    /// </summary>
+    public static void RecordCompletedTrade(ulong userId) => _lastTrade[userId] = DateTime.UtcNow;
 
     public static void ClearCooldown(ulong userId) => _lastTrade.TryRemove(userId, out _);
 
@@ -50,12 +54,17 @@ public static class TradeCooldownTracker
         return gu.Roles.Any(r => list.Contains(r.Id) || list.Contains(r.Name));
     }
 
-    public static Embed BuildCooldownEmbed(int minutesRemaining)
+    public static Embed BuildCooldownEmbed(int minutesRemaining, int limitMinutes)
     {
+        var window = limitMinutes == 60 ? "hour"
+            : limitMinutes % 60 == 0 ? $"{limitMinutes / 60} hours"
+            : $"{limitMinutes} minutes";
+        var wait = minutesRemaining == 1 ? "1 minute" : $"{minutesRemaining} minutes";
         return new EmbedBuilder()
             .WithColor(new Color(255, 140, 0))
-            .WithTitle("⏳ Trade Cooldown")
-            .WithDescription($"Please wait **{minutesRemaining} minutes** to request another pokemon.")
+            .WithTitle("⏳ Free Trade Limit Reached")
+            .WithDescription($"Free members get **1 completed trade per {window}** — and you've already had yours! 🎉\n" +
+                             $"Your next free trade unlocks in **{wait}**.")
             .AddField("💎 GET PREMIUM for UNLIMITED Trades!",
                 "**Step 1:** [Become a Patron](https://www.patreon.com/c/pokedexmasters/membership)\n" +
                 "**Step 2:** [Link your Discord account to Patreon](https://www.patreon.com/settings/apps/discord) to gain the **Premium** role.\n" +
@@ -63,10 +72,10 @@ public static class TradeCooldownTracker
             .Build();
     }
 
-    // Removes entries older than 1 hour — well past any reasonable cooldown.
+    // Removes entries older than 1 day — well past any reasonable trade-limit window.
     private static void Sweep()
     {
-        var cutoff = DateTime.UtcNow - TimeSpan.FromHours(1);
+        var cutoff = DateTime.UtcNow - TimeSpan.FromDays(1);
         foreach (var kvp in _lastTrade)
         {
             if (kvp.Value < cutoff)
